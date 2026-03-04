@@ -1,0 +1,26 @@
+{
+  "name": "qline-mobile",
+  "version": "2.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@types/react": "~18.2.45",
+    "expo": "~50.0.0",
+    "expo-barcode-scanner": "~12.9.3",
+    "expo-router": "^3.4.8",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.73.0",
+    "react-native-web": "~0.19.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

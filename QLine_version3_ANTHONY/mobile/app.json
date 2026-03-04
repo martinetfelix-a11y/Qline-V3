@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "QLine",
+    "slug": "qline",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "qline",
+    "platforms": ["ios", "android", "web"]
+  }
+}
