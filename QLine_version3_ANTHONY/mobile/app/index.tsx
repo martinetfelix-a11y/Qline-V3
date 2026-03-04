@@ -6,5 +6,5 @@ export default function Index() {
 
   if (!auth?.token) return <Redirect href="/login" />;
   if (auth.role === "merchant") return <Redirect href="/(merchant)/dashboard" />;
-  return <Redirect href="/(user)/home" />;
+  return <Redirect href="/(user)/commerces" />;
 }
