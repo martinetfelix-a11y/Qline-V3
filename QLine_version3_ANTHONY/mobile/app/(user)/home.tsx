@@ -1,10 +1,11 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { router } from "expo-router";
 import { useCommerces } from "../../features/commerces/commerces.store";
 import { useUserQueue } from "../../features/queue/userQueue.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
 import { useAuth } from "../../features/auth/AuthProvider";
+
 
 export default function UserHome() {
   const { commerces, loading } = useCommerces();
@@ -20,7 +21,6 @@ export default function UserHome() {
       <Card>
         <Text style={styles.h}>Choisir un commerce</Text>
         {loading && <Text style={styles.muted}>Chargement...</Text>}
-
         <View style={styles.rowWrap}>
           {commerces.map((c) => (
             <Pressable
