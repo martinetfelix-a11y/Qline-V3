@@ -1,8 +1,10 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useUserQueue } from "../../features/queue/userQueue.store";
 import { useCommerces } from "../../features/commerces/commerces.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 export default function TicketsPage() {
@@ -17,7 +19,7 @@ export default function TicketsPage() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenShell contentContainerStyle={styles.content}>
       <AppHeader subtitle="Mes tickets actifs" />
 
       {!q.ticketId && (
@@ -35,7 +37,10 @@ export default function TicketsPage() {
           {q.eta && <Text style={styles.label}>Temps estime : {fmt(q.eta.mean)}</Text>}
 
           <Pressable style={({ pressed }) => [styles.small, pressed && styles.smallPressed]} onPress={q.clearLocal}>
-            <Text style={styles.smallText}>Supprimer mon ticket</Text>
+            <View style={styles.smallRow}>
+              <Ionicons name="trash-outline" size={16} color="white" />
+              <Text style={styles.smallText}>Supprimer mon ticket</Text>
+            </View>
           </Pressable>
         </Card>
       )}
@@ -51,12 +56,11 @@ export default function TicketsPage() {
 
         {!q.queue.length && <Text style={styles.muted}>Aucun client</Text>}
       </Card>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 110 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
   label: {
@@ -74,6 +78,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   smallPressed: { opacity: 0.85 },
+  smallRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   smallText: { color: "white", fontWeight: "800" },
   item: { color: ui.colors.textMuted, marginTop: 4, fontWeight: "600" },
   next: {

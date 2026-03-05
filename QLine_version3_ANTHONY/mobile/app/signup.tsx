@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiSignup } from "../features/auth/auth.api";
 import { fetchPublicCommerces } from "../features/commerces/commerces.api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { AppHeader } from "../components/AppHeader";
+import { ScreenShell } from "../components/ScreenShell";
 import { ui } from "../theme/ui";
 
 type Role = "user" | "merchant";
@@ -51,7 +52,7 @@ export default function SignupScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle="Creer un compte" />
 
       <View style={styles.panel}>
@@ -110,19 +111,24 @@ export default function SignupScreen() {
         {error && <Text style={styles.err}>{error}</Text>}
 
         <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
-          <Text style={styles.btnText}>{loading ? "..." : "Creer le compte"}</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="checkmark-circle-outline" size={18} color="white" />
+            <Text style={styles.btnText}>{loading ? "..." : "Creer le compte"}</Text>
+          </View>
         </Pressable>
 
         <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.replace("/login")}>
-          <Text style={styles.btnAltText}>Retour login</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Retour login</Text>
+          </View>
         </Pressable>
       </View>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 28 },
   panel: {
     backgroundColor: ui.colors.surface,
@@ -204,6 +210,7 @@ const styles = StyleSheet.create({
     ...ui.shadow.soft,
   },
   btnPressed: { backgroundColor: ui.colors.primaryPressed },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
   btnAlt: {
     backgroundColor: ui.colors.surfaceMuted,

@@ -1,15 +1,16 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 export default function MerchantDashboard() {
   const { auth, logout } = useAuth();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenShell contentContainerStyle={styles.content}>
       <AppHeader subtitle={`Commerce : ${auth?.commerceId ?? "-"}`} />
 
       <Text style={styles.menuTitle}>Espace commercant</Text>
@@ -22,6 +23,7 @@ export default function MerchantDashboard() {
           <Text style={styles.cardText}>Gestion de la file</Text>
           <Text style={styles.cardSub}>Appeler le prochain, enregistrer la duree, fermer ou ouvrir la file.</Text>
         </View>
+        <Ionicons name="chevron-forward" size={20} color={ui.colors.textMuted} style={styles.chevron} />
       </Pressable>
 
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/stats")}>
@@ -32,6 +34,7 @@ export default function MerchantDashboard() {
           <Text style={styles.cardText}>Statistiques</Text>
           <Text style={styles.cardSub}>KPI, heures de pointe et distribution des durees.</Text>
         </View>
+        <Ionicons name="chevron-forward" size={20} color={ui.colors.textMuted} style={styles.chevron} />
       </Pressable>
 
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/settings")}>
@@ -42,6 +45,7 @@ export default function MerchantDashboard() {
           <Text style={styles.cardText}>Parametres</Text>
           <Text style={styles.cardSub}>Pause, ouverture, moyenne initiale et informations de compte.</Text>
         </View>
+        <Ionicons name="chevron-forward" size={20} color={ui.colors.textMuted} style={styles.chevron} />
       </Pressable>
 
       <Pressable
@@ -53,12 +57,11 @@ export default function MerchantDashboard() {
       >
         <Text style={styles.logoutText}>Retour au menu login</Text>
       </Pressable>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 30 },
   menuTitle: { fontSize: 22, fontWeight: "900", marginBottom: 14, color: ui.colors.text },
   card: {
@@ -85,6 +88,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   copy: { flex: 1 },
+  chevron: { alignSelf: "center" },
   cardText: { fontSize: 17, fontWeight: "900", marginBottom: 4, color: ui.colors.text },
   cardSub: { fontSize: 13, color: ui.colors.textMuted, lineHeight: 19, fontWeight: "600" },
   logout: {

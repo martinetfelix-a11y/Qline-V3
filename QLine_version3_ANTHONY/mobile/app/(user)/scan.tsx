@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { BarCodeScanner } from "expo-barcode-scanner";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useUserQueue } from "../../features/queue/userQueue.store";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 function extractCommerceId(data: string): string | null {
@@ -44,25 +46,28 @@ export default function ScanScreen() {
 
   if (hasPermission === null) {
     return (
-      <View style={styles.containerCenter}>
+      <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Demande permission camera...</Text>
-      </View>
+      </ScreenShell>
     );
   }
 
   if (hasPermission === false) {
     return (
-      <View style={styles.containerCenter}>
+      <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Acces camera refuse.</Text>
         <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
-          <Text style={styles.btnAltText}>Retour</Text>
+          <View style={styles.rowBtn}>
+            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Retour</Text>
+          </View>
         </Pressable>
-      </View>
+      </ScreenShell>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScreenShell scroll={false} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text style={styles.title}>Scanner un QR</Text>
         <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
@@ -84,23 +89,30 @@ export default function ScanScreen() {
             setMsg("");
           }}
         >
-          <Text style={styles.btnText}>Scanner encore</Text>
+          <View style={styles.rowBtn}>
+            <Ionicons name="scan-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Scanner encore</Text>
+          </View>
         </Pressable>
       )}
 
       <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
-        <Text style={styles.btnAltText}>Retour</Text>
+        <View style={styles.rowBtn}>
+          <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+          <Text style={styles.btnAltText}>Retour</Text>
+        </View>
       </Pressable>
-    </View>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: ui.colors.bg },
-  containerCenter: {
+  content: {
+    padding: 16,
+  },
+  centerContent: {
     flex: 1,
     padding: 16,
-    backgroundColor: ui.colors.bg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -142,6 +154,7 @@ const styles = StyleSheet.create({
     ...ui.shadow.soft,
   },
   btnPressed: { backgroundColor: ui.colors.primaryPressed },
+  rowBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { color: "white", fontWeight: "900" },
   btnAlt: {
     backgroundColor: ui.colors.surface,

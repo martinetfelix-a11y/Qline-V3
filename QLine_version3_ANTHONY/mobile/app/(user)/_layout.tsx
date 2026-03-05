@@ -25,6 +25,7 @@ export default function UserLayout() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: "700",
+          fontFamily: ui.typography.title,
           marginBottom: 6,
         },
       }}

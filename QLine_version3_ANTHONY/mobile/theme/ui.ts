@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const ui = {
   colors: {
     bg: "#eef7f1",
@@ -44,5 +46,22 @@ export const ui = {
       shadowOffset: { width: 0, height: 4 },
       elevation: 3,
     },
+  },
+  typography: {
+    display: Platform.select({
+      ios: "AvenirNext-Heavy",
+      android: "sans-serif-black",
+      default: "System",
+    }),
+    title: Platform.select({
+      ios: "AvenirNext-DemiBold",
+      android: "sans-serif-medium",
+      default: "System",
+    }),
+    body: Platform.select({
+      ios: "AvenirNext-Regular",
+      android: "sans-serif",
+      default: "System",
+    }),
   },
 };

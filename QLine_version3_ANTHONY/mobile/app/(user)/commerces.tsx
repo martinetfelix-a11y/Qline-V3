@@ -1,9 +1,11 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCommerces } from "../../features/commerces/commerces.store";
 import { useUserQueue } from "../../features/queue/userQueue.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { ui } from "../../theme/ui";
 
@@ -13,7 +15,7 @@ export default function CommercesPage() {
   const { logout } = useAuth();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenShell contentContainerStyle={styles.content}>
       <AppHeader subtitle="Choisir un commerce" />
 
       <Card>
@@ -31,17 +33,26 @@ export default function CommercesPage() {
         </View>
 
         <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={() => q.join()}>
-          <Text style={styles.btnText}>Prendre un ticket</Text>
+          <View style={styles.btnContent}>
+            <Ionicons name="ticket-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Prendre un ticket</Text>
+          </View>
         </Pressable>
 
         {q.ticketId && (
           <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={() => router.push("/(user)/tickets")}>
-            <Text style={styles.btnText}>Voir mes tickets</Text>
+            <View style={styles.btnContent}>
+              <Ionicons name="list-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Voir mes tickets</Text>
+            </View>
           </Pressable>
         )}
 
         <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.push("/(user)/scan")}>
-          <Text style={styles.btnAltText}>Scanner un QR</Text>
+          <View style={styles.btnContent}>
+            <Ionicons name="scan-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Scanner un QR</Text>
+          </View>
         </Pressable>
 
         {q.error && <Text style={styles.err}>{q.error}</Text>}
@@ -56,12 +67,11 @@ export default function CommercesPage() {
       >
         <Text style={styles.logoutText}>Retour au menu login</Text>
       </Pressable>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 110 },
   h: { fontSize: 20, fontWeight: "900", marginBottom: 6, color: ui.colors.text },
   muted: { color: ui.colors.textMuted, fontSize: 13, marginTop: 4, lineHeight: 18, fontWeight: "600" },
@@ -87,6 +97,7 @@ const styles = StyleSheet.create({
     ...ui.shadow.soft,
   },
   btnPressed: { backgroundColor: ui.colors.primaryPressed },
+  btnContent: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
   btnAlt: {
     backgroundColor: ui.colors.surface,

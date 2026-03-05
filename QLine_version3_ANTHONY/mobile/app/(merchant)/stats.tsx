@@ -1,9 +1,11 @@
-import { ScrollView, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { useStats } from "../../features/stats/stats.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 export default function MerchantStats() {
@@ -16,11 +18,14 @@ export default function MerchantStats() {
   const peakServed = bins.reduce((best, b) => (b.served > (best?.served ?? -1) ? b : best), null as any);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenShell contentContainerStyle={styles.content}>
       <AppHeader subtitle={`Stats - ${commerceId} - ${day}`} />
 
       <Pressable style={({ pressed }) => [styles.back, pressed && styles.backPressed]} onPress={() => router.back()}>
-        <Text style={styles.backText}>Retour dashboard</Text>
+        <View style={styles.backRow}>
+          <Ionicons name="arrow-back-outline" size={16} color="white" />
+          <Text style={styles.backText}>Retour dashboard</Text>
+        </View>
       </Pressable>
 
       {loading && <Text style={styles.sub}>Chargement...</Text>}
@@ -58,12 +63,11 @@ export default function MerchantStats() {
         ))}
         <Text style={styles.sub}>Astuce: alimente la distribution en entrant durationSec quand tu appelles le prochain.</Text>
       </Card>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 30 },
   sub: { color: ui.colors.textMuted, marginTop: 8, fontWeight: "600", lineHeight: 18 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
@@ -77,5 +81,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   backPressed: { opacity: 0.85 },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   backText: { color: "white", fontWeight: "900" },
 });

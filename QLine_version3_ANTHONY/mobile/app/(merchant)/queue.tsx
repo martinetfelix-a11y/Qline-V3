@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantNext, merchantClose, merchantOpen, merchantPause } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 export default function MerchantQueue() {
@@ -83,7 +85,7 @@ export default function MerchantQueue() {
   const fmt = (sec: number) => `${Math.round(sec / 60)} min`;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle={`Gestion de file - ${commerceId}`} />
 
       <Card>
@@ -97,17 +99,26 @@ export default function MerchantQueue() {
 
         <View style={styles.row}>
           <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
-            <Text style={styles.btnText}>Retour dashboard</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name="arrow-back-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Retour dashboard</Text>
+            </View>
           </Pressable>
 
           <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={togglePause}>
-            <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Mettre en pause"}</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
+              <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Mettre en pause"}</Text>
+            </View>
           </Pressable>
         </View>
 
         {!state?.open && (
           <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={open}>
-            <Text style={styles.btnText}>Ouvrir la file</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name="lock-open-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Ouvrir la file</Text>
+            </View>
           </Pressable>
         )}
       </Card>
@@ -135,19 +146,24 @@ export default function MerchantQueue() {
         />
 
         <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={callNext}>
-          <Text style={styles.btnText}>Appeler le prochain</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="play-forward-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Appeler le prochain</Text>
+          </View>
         </Pressable>
 
         <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={close}>
-          <Text style={styles.btnText}>Fermer la file</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="close-circle-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Fermer la file</Text>
+          </View>
         </Pressable>
       </Card>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 30 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
   line: { color: ui.colors.text, fontWeight: "700", marginBottom: 2 },
@@ -181,5 +197,6 @@ const styles = StyleSheet.create({
   btnDarkPressed: { opacity: 0.85 },
   btnDanger: { backgroundColor: ui.colors.danger, borderRadius: ui.radius.pill, padding: 14, alignItems: "center", marginTop: 10 },
   btnDangerPressed: { opacity: 0.85 },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
 });

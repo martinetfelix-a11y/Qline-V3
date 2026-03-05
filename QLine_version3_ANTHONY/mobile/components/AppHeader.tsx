@@ -1,10 +1,36 @@
-import { View, Text, Image, StyleSheet } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, View, Text, Image, StyleSheet } from "react-native";
 import { ui } from "../theme/ui";
 
 export function AppHeader({ subtitle }: { subtitle?: string }) {
+  const appear = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(appear, {
+      toValue: 1,
+      duration: 420,
+      useNativeDriver: true,
+    }).start();
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+
+    return () => loop.stop();
+  }, [appear, pulse]);
+
+  const translateY = appear.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+  const dotScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] });
+  const dotOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] });
+
   return (
     <View style={styles.container}>
-      <View style={styles.shell}>
+      <Animated.View style={[styles.shell, { opacity: appear, transform: [{ translateY }] }]}>
         <View style={styles.logoWrap}>
           <Image
             source={require("../app/assets/logo.jpg")}
@@ -16,8 +42,8 @@ export function AppHeader({ subtitle }: { subtitle?: string }) {
           <Text style={styles.title}>QLine</Text>
           {subtitle ? <Text style={styles.sub}>{subtitle}</Text> : null}
         </View>
-        <View style={styles.dot} />
-      </View>
+        <Animated.View style={[styles.dot, { transform: [{ scale: dotScale }], opacity: dotOpacity }]} />
+      </Animated.View>
     </View>
   );
 }
@@ -54,6 +80,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: "900",
+    fontFamily: ui.typography.display,
     color: ui.colors.text,
     letterSpacing: 0.3,
   },
@@ -62,6 +89,7 @@ const styles = StyleSheet.create({
     color: ui.colors.textMuted,
     marginTop: 1,
     fontWeight: "600",
+    fontFamily: ui.typography.body,
   },
   dot: {
     width: 10,

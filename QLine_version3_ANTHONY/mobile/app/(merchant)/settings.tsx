@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantOpen, merchantClose, merchantPause, merchantSetAvg } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ScreenShell } from "../../components/ScreenShell";
 import { ui } from "../../theme/ui";
 
 export default function MerchantSettings() {
@@ -72,7 +74,7 @@ export default function MerchantSettings() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle={`Parametres - ${commerceId}`} />
 
       <Card>
@@ -82,7 +84,10 @@ export default function MerchantSettings() {
         <Text style={styles.line}>CommerceId: {auth?.commerceId ?? "-"}</Text>
 
         <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
-          <Text style={styles.btnText}>Retour dashboard</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="arrow-back-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Retour dashboard</Text>
+          </View>
         </Pressable>
       </Card>
 
@@ -93,13 +98,22 @@ export default function MerchantSettings() {
 
         <View style={styles.row}>
           <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={doOpen}>
-            <Text style={styles.btnText}>Ouvrir</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name="lock-open-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Ouvrir</Text>
+            </View>
           </Pressable>
           <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={doTogglePause}>
-            <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
+              <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
+            </View>
           </Pressable>
           <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={doClose}>
-            <Text style={styles.btnText}>Fermer</Text>
+            <View style={styles.btnRow}>
+              <Ionicons name="close-circle-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Fermer</Text>
+            </View>
           </Pressable>
         </View>
 
@@ -118,21 +132,26 @@ export default function MerchantSettings() {
           placeholderTextColor={ui.colors.textMuted}
         />
         <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={doSetAvg}>
-          <Text style={styles.btnText}>Mettre a jour</Text>
+          <View style={styles.btnRow}>
+            <Ionicons name="refresh-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Mettre a jour</Text>
+          </View>
         </Pressable>
       </Card>
 
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
       <Pressable style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]} onPress={doLogout}>
-        <Text style={styles.btnText}>Retour au login</Text>
+        <View style={styles.btnRow}>
+          <Ionicons name="log-out-outline" size={18} color="white" />
+          <Text style={styles.btnText}>Retour au login</Text>
+        </View>
       </Pressable>
-    </ScrollView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: ui.colors.bg },
   content: { padding: 16, paddingBottom: 30 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
   line: { color: ui.colors.text, fontWeight: "700", marginBottom: 2 },
@@ -167,6 +186,7 @@ const styles = StyleSheet.create({
   btnDangerPressed: { opacity: 0.85 },
   btnDark: { backgroundColor: ui.colors.darkButton, borderRadius: ui.radius.pill, padding: 14, alignItems: "center", marginTop: 10 },
   btnDarkPressed: { opacity: 0.85 },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
   logout: { marginTop: 8, backgroundColor: ui.colors.darkButton, borderRadius: ui.radius.pill, padding: 14, alignItems: "center" },
   logoutPressed: { opacity: 0.85 },
