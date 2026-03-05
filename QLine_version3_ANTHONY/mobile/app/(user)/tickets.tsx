@@ -1,8 +1,9 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
 import { useUserQueue } from "../../features/queue/userQueue.store";
 import { useCommerces } from "../../features/commerces/commerces.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ui } from "../../theme/ui";
 
 export default function TicketsPage() {
   const q = useUserQueue();
@@ -16,44 +17,29 @@ export default function TicketsPage() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <AppHeader subtitle="Mes tickets actifs" />
 
-      {/* aucun ticket */}
       {!q.ticketId && (
         <Card>
           <Text style={styles.muted}>Aucun ticket actif</Text>
         </Card>
       )}
 
-      {/* ticket actif */}
       {q.ticketId && (
         <Card>
           <Text style={styles.h}>Ticket actif</Text>
-
-          <Text style={styles.label}>
-            Commerce : {getCommerceName(q.commerceId)}
-          </Text>
-
+          <Text style={styles.label}>Commerce : {getCommerceName(q.commerceId)}</Text>
           <Text style={styles.label}>Ticket : {q.ticketId}</Text>
+          <Text style={styles.label}>Position : {q.position ?? "-"}</Text>
+          {q.eta && <Text style={styles.label}>Temps estime : {fmt(q.eta.mean)}</Text>}
 
-          <Text style={styles.label}>
-            Position : {q.position ?? "-"}
-          </Text>
-
-          {q.eta && (
-            <Text style={styles.label}>
-              Temps estimé : {fmt(q.eta.mean)}
-            </Text>
-          )}
-
-          <Pressable style={styles.small} onPress={q.clearLocal}>
+          <Pressable style={({ pressed }) => [styles.small, pressed && styles.smallPressed]} onPress={q.clearLocal}>
             <Text style={styles.smallText}>Supprimer mon ticket</Text>
           </Pressable>
         </Card>
       )}
 
-      {/* file */}
       <Card>
         <Text style={styles.h}>File d'attente</Text>
 
@@ -63,42 +49,36 @@ export default function TicketsPage() {
           </Text>
         ))}
 
-        {!q.queue.length && (
-          <Text style={styles.muted}>Aucun client</Text>
-        )}
+        {!q.queue.length && <Text style={styles.muted}>Aucun client</Text>}
       </Card>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#f3f4f6" },
-
-  h: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
-
+  container: { flex: 1, backgroundColor: ui.colors.bg },
+  content: { padding: 16, paddingBottom: 110 },
+  h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
   label: {
     fontSize: 14,
-    marginTop: 4,
-    color: "#374151",
+    marginTop: 6,
+    color: ui.colors.text,
+    fontWeight: "600",
   },
-
-  muted: { color: "#6b7280", fontSize: 12 },
-
+  muted: { color: ui.colors.textMuted, fontSize: 13, fontWeight: "600" },
   small: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#374151",
+    marginTop: 12,
+    padding: 12,
+    borderRadius: ui.radius.md,
+    backgroundColor: ui.colors.darkButton,
     alignItems: "center",
   },
-
-  smallText: { color: "white", fontWeight: "700" },
-
-  item: { color: "#374151", marginTop: 2 },
-
+  smallPressed: { opacity: 0.85 },
+  smallText: { color: "white", fontWeight: "800" },
+  item: { color: ui.colors.textMuted, marginTop: 4, fontWeight: "600" },
   next: {
-    color: "#15803d",
-    fontWeight: "800",
-    marginTop: 2,
+    color: ui.colors.primaryDeep,
+    fontWeight: "900",
+    marginTop: 4,
   },
 });

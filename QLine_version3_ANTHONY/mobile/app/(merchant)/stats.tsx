@@ -1,9 +1,10 @@
-import { ScrollView, Text, StyleSheet, Pressable, View } from "react-native";
+import { ScrollView, Text, StyleSheet, Pressable } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { useStats } from "../../features/stats/stats.store";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ui } from "../../theme/ui";
 
 export default function MerchantStats() {
   const { auth } = useAuth();
@@ -11,53 +12,47 @@ export default function MerchantStats() {
   const { day, kpis, series, hist, loading } = useStats(commerceId);
 
   const bins = (series?.series || []) as any[];
-  const peakJoin = bins.reduce(
-    (best, b) => (b.join > (best?.join ?? -1) ? b : best),
-    null as any
-  );
-  const peakServed = bins.reduce(
-    (best, b) => (b.served > (best?.served ?? -1) ? b : best),
-    null as any
-  );
+  const peakJoin = bins.reduce((best, b) => (b.join > (best?.join ?? -1) ? b : best), null as any);
+  const peakServed = bins.reduce((best, b) => (b.served > (best?.served ?? -1) ? b : best), null as any);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
-      <AppHeader subtitle={`Stats — ${commerceId} — ${day}`} />
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <AppHeader subtitle={`Stats - ${commerceId} - ${day}`} />
 
-      <Pressable style={styles.back} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Dashboard</Text>
+      <Pressable style={({ pressed }) => [styles.back, pressed && styles.backPressed]} onPress={() => router.back()}>
+        <Text style={styles.backText}>Retour dashboard</Text>
       </Pressable>
 
       {loading && <Text style={styles.sub}>Chargement...</Text>}
 
       <Card>
         <Text style={styles.h}>KPI du jour</Text>
-        <Text>En attente maintenant: {kpis?.waitingNow ?? "-"}</Text>
-        <Text>Tickets pris: {kpis?.joinedToday ?? "-"}</Text>
-        <Text>Clients servis: {kpis?.servedToday ?? "-"}</Text>
-        <Text>Durée moyenne: {kpis?.avgServiceMin ?? "-"} min</Text>
-        <Text>P90 durée: {kpis?.p90ServiceMin ?? "-"} min</Text>
+        <Text style={styles.rowText}>En attente maintenant: {kpis?.waitingNow ?? "-"}</Text>
+        <Text style={styles.rowText}>Tickets pris: {kpis?.joinedToday ?? "-"}</Text>
+        <Text style={styles.rowText}>Clients servis: {kpis?.servedToday ?? "-"}</Text>
+        <Text style={styles.rowText}>Duree moyenne: {kpis?.avgServiceMin ?? "-"} min</Text>
+        <Text style={styles.rowText}>P90 duree: {kpis?.p90ServiceMin ?? "-"} min</Text>
       </Card>
 
       <Card>
         <Text style={styles.h}>Heures de pointe</Text>
-        <Text>Pic d’arrivées: {peakJoin ? `${String(peakJoin.hour).padStart(2, "0")}h (${peakJoin.join})` : "-"}</Text>
-        <Text>Pic de service: {peakServed ? `${String(peakServed.hour).padStart(2, "0")}h (${peakServed.served})` : "-"}</Text>
+        <Text style={styles.rowText}>Pic d arrivees: {peakJoin ? `${String(peakJoin.hour).padStart(2, "0")}h (${peakJoin.join})` : "-"}</Text>
+        <Text style={styles.rowText}>Pic de service: {peakServed ? `${String(peakServed.hour).padStart(2, "0")}h (${peakServed.served})` : "-"}</Text>
       </Card>
 
       <Card>
-        <Text style={styles.h}>Série horaire (joins/served)</Text>
+        <Text style={styles.h}>Serie horaire (joins/served)</Text>
         {bins.map((b: any) => (
-          <Text key={b.hour}>
-            {String(b.hour).padStart(2, "0")}h — joins: {b.join}, served: {b.served}
+          <Text key={b.hour} style={styles.rowText}>
+            {String(b.hour).padStart(2, "0")}h - joins: {b.join}, served: {b.served}
           </Text>
         ))}
       </Card>
 
       <Card>
-        <Text style={styles.h}>Distribution des durées (histogramme 5 min)</Text>
+        <Text style={styles.h}>Distribution des durees (histogramme 5 min)</Text>
         {(hist?.histogram || []).map((bin: any) => (
-          <Text key={bin.minFrom}>
+          <Text key={bin.minFrom} style={styles.rowText}>
             {bin.minFrom}-{bin.minTo} min : {bin.count}
           </Text>
         ))}
@@ -68,9 +63,19 @@ export default function MerchantStats() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f4f6" },
-  sub: { color: "#6b7280", marginTop: 8 },
-  h: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
-  back: { alignSelf: "flex-start", backgroundColor: "#374151", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, marginBottom: 12 },
-  backText: { color: "white", fontWeight: "800" },
+  container: { flex: 1, backgroundColor: ui.colors.bg },
+  content: { padding: 16, paddingBottom: 30 },
+  sub: { color: ui.colors.textMuted, marginTop: 8, fontWeight: "600", lineHeight: 18 },
+  h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
+  rowText: { color: ui.colors.text, marginBottom: 4, fontWeight: "600" },
+  back: {
+    alignSelf: "flex-start",
+    backgroundColor: ui.colors.darkButton,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: ui.radius.pill,
+    marginBottom: 12,
+  },
+  backPressed: { opacity: 0.85 },
+  backText: { color: "white", fontWeight: "900" },
 });

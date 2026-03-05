@@ -5,6 +5,7 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantOpen, merchantClose, merchantPause, merchantSetAvg } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { ui } from "../../theme/ui";
 
 export default function MerchantSettings() {
   const { auth, logout } = useAuth();
@@ -46,7 +47,7 @@ export default function MerchantSettings() {
     setMsg(null);
     await merchantClose(token, commerceId);
     await refresh();
-    setMsg("File fermée (et vidée).");
+    setMsg("File fermee (et videe).");
   };
 
   const doTogglePause = async () => {
@@ -67,37 +68,37 @@ export default function MerchantSettings() {
     }
     await merchantSetAvg(token, commerceId, n);
     await refresh();
-    setMsg("Moyenne mise à jour.");
+    setMsg("Moyenne mise a jour.");
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <AppHeader subtitle={`Paramètres — ${commerceId}`} />
+      <AppHeader subtitle={`Parametres - ${commerceId}`} />
 
       <Card>
         <Text style={styles.h}>Compte</Text>
-        <Text>Email: {auth?.email ?? "-"}</Text>
-        <Text>Rôle: {auth?.role ?? "-"}</Text>
-        <Text>CommerceId: {auth?.commerceId ?? "-"}</Text>
+        <Text style={styles.line}>Email: {auth?.email ?? "-"}</Text>
+        <Text style={styles.line}>Role: {auth?.role ?? "-"}</Text>
+        <Text style={styles.line}>CommerceId: {auth?.commerceId ?? "-"}</Text>
 
-        <Pressable style={styles.btnDark} onPress={() => router.back()}>
-          <Text style={styles.btnText}>← Dashboard</Text>
+        <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
+          <Text style={styles.btnText}>Retour dashboard</Text>
         </Pressable>
       </Card>
 
       <Card>
-        <Text style={styles.h}>État de la file</Text>
-        <Text>Ouverte: {state ? (state.open ? "Oui" : "Non") : "-"}</Text>
-        <Text>En pause: {state ? (state.paused ? "Oui" : "Non") : "-"}</Text>
+        <Text style={styles.h}>Etat de la file</Text>
+        <Text style={styles.line}>Ouverte: {state ? (state.open ? "Oui" : "Non") : "-"}</Text>
+        <Text style={styles.line}>En pause: {state ? (state.paused ? "Oui" : "Non") : "-"}</Text>
 
         <View style={styles.row}>
-          <Pressable style={styles.btnGreen} onPress={doOpen}>
+          <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={doOpen}>
             <Text style={styles.btnText}>Ouvrir</Text>
           </Pressable>
-          <Pressable style={styles.btnAlt} onPress={doTogglePause}>
+          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={doTogglePause}>
             <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
           </Pressable>
-          <Pressable style={styles.btnDanger} onPress={doClose}>
+          <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={doClose}>
             <Text style={styles.btnText}>Fermer</Text>
           </Pressable>
         </View>
@@ -106,17 +107,24 @@ export default function MerchantSettings() {
       </Card>
 
       <Card>
-        <Text style={styles.h}>Modèle ETA (IA)</Text>
-        <Text style={styles.muted}>Définis une moyenne initiale (en minutes). Le modèle s’ajuste ensuite avec les durées réelles.</Text>
-        <TextInput style={styles.input} value={avgMin} onChangeText={setAvgMin} keyboardType="numeric" placeholder="avg minutes" />
-        <Pressable style={styles.btnDark} onPress={doSetAvg}>
-          <Text style={styles.btnText}>Mettre à jour</Text>
+        <Text style={styles.h}>Modele ETA (IA)</Text>
+        <Text style={styles.muted}>Definis une moyenne initiale (en minutes). Le modele s ajuste ensuite avec les durees reelles.</Text>
+        <TextInput
+          style={styles.input}
+          value={avgMin}
+          onChangeText={setAvgMin}
+          keyboardType="numeric"
+          placeholder="avg minutes"
+          placeholderTextColor={ui.colors.textMuted}
+        />
+        <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={doSetAvg}>
+          <Text style={styles.btnText}>Mettre a jour</Text>
         </Pressable>
       </Card>
 
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
-      <Pressable style={styles.logout} onPress={doLogout}>
+      <Pressable style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]} onPress={doLogout}>
         <Text style={styles.btnText}>Retour au login</Text>
       </Pressable>
     </ScrollView>
@@ -124,17 +132,42 @@ export default function MerchantSettings() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f4f6" },
-  content: { padding: 16, paddingBottom: 24 },
-  h: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
-  muted: { color: "#6b7280", fontSize: 12, marginTop: 6 },
-  msg: { marginTop: 10, fontWeight: "800", color: "#111827" },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 },
-  input: { backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#e5e7eb", marginTop: 10 },
-  btnGreen: { backgroundColor: "#22c55e", borderRadius: 999, padding: 12, alignItems: "center" },
-  btnAlt: { backgroundColor: "#111827", borderRadius: 999, padding: 12, alignItems: "center" },
-  btnDanger: { backgroundColor: "#ef4444", borderRadius: 999, padding: 12, alignItems: "center" },
-  btnDark: { backgroundColor: "#374151", borderRadius: 999, padding: 14, alignItems: "center", marginTop: 10 },
-  btnText: { color: "white", fontWeight: "800" },
-  logout: { marginTop: 16, backgroundColor: "#ef4444", borderRadius: 999, padding: 14, alignItems: "center" },
+  container: { flex: 1, backgroundColor: ui.colors.bg },
+  content: { padding: 16, paddingBottom: 30 },
+  h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
+  line: { color: ui.colors.text, fontWeight: "700", marginBottom: 2 },
+  muted: { color: ui.colors.textMuted, fontSize: 13, marginTop: 8, lineHeight: 18, fontWeight: "600" },
+  msg: {
+    marginTop: 2,
+    marginBottom: 8,
+    fontWeight: "800",
+    color: ui.colors.primaryDeep,
+    backgroundColor: ui.colors.primarySoft,
+    borderWidth: 1,
+    borderColor: ui.colors.borderStrong,
+    borderRadius: ui.radius.md,
+    padding: 12,
+  },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
+  input: {
+    backgroundColor: ui.colors.bgSoft,
+    borderRadius: ui.radius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    marginTop: 12,
+    color: ui.colors.text,
+    fontWeight: "700",
+  },
+  btnGreen: { backgroundColor: ui.colors.primary, borderRadius: ui.radius.pill, padding: 12, alignItems: "center", ...ui.shadow.soft },
+  btnGreenPressed: { backgroundColor: ui.colors.primaryPressed },
+  btnAlt: { backgroundColor: ui.colors.primaryDeep, borderRadius: ui.radius.pill, padding: 12, alignItems: "center" },
+  btnAltPressed: { opacity: 0.85 },
+  btnDanger: { backgroundColor: ui.colors.danger, borderRadius: ui.radius.pill, padding: 12, alignItems: "center" },
+  btnDangerPressed: { opacity: 0.85 },
+  btnDark: { backgroundColor: ui.colors.darkButton, borderRadius: ui.radius.pill, padding: 14, alignItems: "center", marginTop: 10 },
+  btnDarkPressed: { opacity: 0.85 },
+  btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
+  logout: { marginTop: 8, backgroundColor: ui.colors.darkButton, borderRadius: ui.radius.pill, padding: 14, alignItems: "center" },
+  logoutPressed: { opacity: 0.85 },
 });
