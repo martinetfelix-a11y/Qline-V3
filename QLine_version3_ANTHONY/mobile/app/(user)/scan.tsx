@@ -4,7 +4,9 @@ import { BarCodeScanner } from "expo-barcode-scanner";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useUserQueue } from "../../features/queue/userQueue.store";
+import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
+import { StatusPill } from "../../components/StatusPill";
 import { ui } from "../../theme/ui";
 
 function extractCommerceId(data: string): string | null {
@@ -41,7 +43,7 @@ export default function ScanScreen() {
     }
     setMsg(`Commerce detecte: ${cid}. Rejoindre...`);
     await q.join(cid);
-    router.replace("/(user)/home");
+    router.replace("/(user)/tickets");
   };
 
   if (hasPermission === null) {
@@ -68,40 +70,59 @@ export default function ScanScreen() {
 
   return (
     <ScreenShell scroll={false} contentContainerStyle={styles.content}>
-      <View style={styles.hero}>
-        <Text style={styles.title}>Scanner un QR</Text>
-        <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
-      </View>
-
-      <View style={styles.scannerShell}>
-        <View style={styles.scanner}>
-          <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
+      <Reveal delay={70}>
+        <View style={styles.badgeRow}>
+          <StatusPill label={scanned ? "Scan termine" : "Scan en cours"} tone={scanned ? "warning" : "success"} />
+          <StatusPill label="QR commerce" tone="neutral" />
         </View>
-      </View>
+      </Reveal>
+
+      <Reveal delay={130}>
+        <View style={styles.hero}>
+          <Text style={styles.title}>Scanner un QR</Text>
+          <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
+        </View>
+      </Reveal>
+
+      <Reveal delay={190}>
+        <View style={styles.scannerShell}>
+          <View style={styles.scanner}>
+            <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerTL]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerTR]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerBL]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerBR]} />
+          </View>
+        </View>
+      </Reveal>
 
       {!!msg && <Text style={styles.msg}>{msg}</Text>}
 
       {scanned && (
-        <Pressable
-          style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-          onPress={() => {
-            setScanned(false);
-            setMsg("");
-          }}
-        >
-          <View style={styles.rowBtn}>
-            <Ionicons name="scan-outline" size={18} color="white" />
-            <Text style={styles.btnText}>Scanner encore</Text>
-          </View>
-        </Pressable>
+        <Reveal delay={240}>
+          <Pressable
+            style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
+            onPress={() => {
+              setScanned(false);
+              setMsg("");
+            }}
+          >
+            <View style={styles.rowBtn}>
+              <Ionicons name="scan-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Scanner encore</Text>
+            </View>
+          </Pressable>
+        </Reveal>
       )}
 
-      <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
-        <View style={styles.rowBtn}>
-          <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
-          <Text style={styles.btnAltText}>Retour</Text>
-        </View>
-      </Pressable>
+      <Reveal delay={260}>
+        <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
+          <View style={styles.rowBtn}>
+            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Retour</Text>
+          </View>
+        </Pressable>
+      </Reveal>
     </ScreenShell>
   );
 }
@@ -116,6 +137,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  badgeRow: { flexDirection: "row", gap: 8, marginBottom: 8, flexWrap: "wrap" },
   hero: {
     marginBottom: 10,
     backgroundColor: ui.colors.surface,
@@ -144,6 +166,17 @@ const styles = StyleSheet.create({
     borderColor: ui.colors.border,
     backgroundColor: "black",
   },
+  corner: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderColor: "rgba(255,255,255,0.95)",
+    borderWidth: 3,
+  },
+  cornerTL: { top: 14, left: 14, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+  cornerTR: { top: 14, right: 14, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+  cornerBL: { bottom: 14, left: 14, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+  cornerBR: { bottom: 14, right: 14, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
   msg: { marginTop: 12, color: ui.colors.text, fontWeight: "700" },
   btn: {
     backgroundColor: ui.colors.primary,

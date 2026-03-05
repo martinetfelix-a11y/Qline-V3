@@ -6,8 +6,24 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantNext, merchantClose, merchantOpen, merchantPause } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
+import { ShimmerLine } from "../../components/ShimmerLine";
+import { StatusPill } from "../../components/StatusPill";
 import { ui } from "../../theme/ui";
+
+function fmtMin(sec: number) {
+  return `${Math.max(0, Math.round(sec / 60))} min`;
+}
+
+function fmtTime(iso: string | null | undefined) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
 
 export default function MerchantQueue() {
   const { auth } = useAuth();
@@ -15,6 +31,7 @@ export default function MerchantQueue() {
   const commerceId = auth?.commerceId || "c1";
 
   const [queue, setQueue] = useState<any[]>([]);
+  const [nowServing, setNowServing] = useState<any | null>(null);
   const [avgServiceSec, setAvgServiceSec] = useState<number | null>(null);
   const [durationSec, setDurationSec] = useState("600");
   const [serverTime, setServerTime] = useState<string | null>(null);
@@ -26,12 +43,13 @@ export default function MerchantQueue() {
     try {
       const data = await getQueueState(token, commerceId);
       setQueue(data.queue || []);
+      setNowServing(data.nowServing ?? null);
       setAvgServiceSec(data.eta?.avgServiceSec ?? null);
       setServerTime(data.serverTime ?? null);
       setState(data.state ?? null);
       setErr(null);
     } catch {
-      setErr("Erreur refresh (API)");
+      setErr("Mise a jour impossible.");
     }
   };
 
@@ -48,7 +66,7 @@ export default function MerchantQueue() {
       await merchantNext(token, commerceId, Number.isFinite(sec) ? sec : undefined);
       await refresh();
     } catch {
-      setErr("Next refuse (verifie login merchant).");
+      setErr("Action impossible.");
     }
   };
 
@@ -58,7 +76,7 @@ export default function MerchantQueue() {
       await merchantClose(token, commerceId);
       await refresh();
     } catch {
-      setErr("Close refuse.");
+      setErr("Action impossible.");
     }
   };
 
@@ -68,7 +86,7 @@ export default function MerchantQueue() {
       await merchantOpen(token, commerceId);
       await refresh();
     } catch {
-      setErr("Open refuse.");
+      setErr("Action impossible.");
     }
   };
 
@@ -78,87 +96,145 @@ export default function MerchantQueue() {
       await merchantPause(token, commerceId, !(state?.paused ?? false));
       await refresh();
     } catch {
-      setErr("Pause/Resume refuse.");
+      setErr("Action impossible.");
     }
   };
 
-  const fmt = (sec: number) => `${Math.round(sec / 60)} min`;
+  const booting = !serverTime && !err && !state && queue.length === 0;
+  const nextClient = queue[0] || null;
 
   return (
     <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <AppHeader subtitle={`Gestion de file - ${commerceId}`} />
+      <AppHeader subtitle={`Operations file - ${commerceId}`} />
 
-      <Card>
-        <Text style={styles.h}>Etat</Text>
-        <Text style={styles.line}>Ouverte: {state ? (state.open ? "Oui" : "Non") : "-"}</Text>
-        <Text style={styles.line}>En pause: {state ? (state.paused ? "Oui" : "Non") : "-"}</Text>
-        <Text style={styles.muted}>Heure serveur: {serverTime ?? "-"}</Text>
-        <Text style={styles.muted}>En attente: {queue.length}</Text>
-        <Text style={styles.muted}>Service moyen appris: {avgServiceSec ? fmt(avgServiceSec) : "-"}</Text>
-        {err && <Text style={styles.err}>{err}</Text>}
-
-        <View style={styles.row}>
-          <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
-            <View style={styles.btnRow}>
-              <Ionicons name="arrow-back-outline" size={18} color="white" />
-              <Text style={styles.btnText}>Retour dashboard</Text>
-            </View>
-          </Pressable>
-
-          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={togglePause}>
-            <View style={styles.btnRow}>
-              <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
-              <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Mettre en pause"}</Text>
-            </View>
-          </Pressable>
+      <Reveal delay={90}>
+        <View style={styles.pillRow}>
+          <StatusPill label={state?.open ? "File ouverte" : "File fermee"} tone={state?.open ? "success" : "danger"} />
+          <StatusPill label={state?.paused ? "En pause" : "Service actif"} tone={state?.paused ? "warning" : "success"} />
+          <StatusPill label={`En attente ${queue.length}`} tone="neutral" />
         </View>
+      </Reveal>
 
-        {!state?.open && (
-          <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={open}>
+      <Reveal delay={150}>
+        <Card>
+          <Text style={styles.h}>Vue operationnelle</Text>
+          <Text style={styles.muted}>Heure serveur: {serverTime ?? "-"}</Text>
+          <Text style={styles.muted}>Duree moyenne actuelle: {avgServiceSec ? fmtMin(avgServiceSec) : "-"}</Text>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Client en cours</Text>
+            {nowServing ? (
+              <>
+                <Text style={styles.rowStrong}>Ticket: {nowServing.id}</Text>
+                <Text style={styles.rowMuted}>Appele a: {fmtTime(nowServing.calledAt)}</Text>
+                {nowServing.userEmail ? <Text style={styles.rowMuted}>Client: {nowServing.userEmail}</Text> : null}
+              </>
+            ) : (
+              <Text style={styles.rowMuted}>Aucun client en cours.</Text>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Prochain client</Text>
+            {nextClient ? (
+              <>
+                <Text style={styles.rowStrong}>Ticket: {nextClient.id}</Text>
+                <Text style={styles.rowMuted}>Arrive a: {fmtTime(nextClient.joinedAt)}</Text>
+                <Text style={styles.rowMuted}>Attente: {fmtMin(nextClient.waitSec ?? 0)}</Text>
+                {nextClient.userEmail ? <Text style={styles.rowMuted}>Client: {nextClient.userEmail}</Text> : null}
+              </>
+            ) : (
+              <Text style={styles.rowMuted}>Aucun client en attente.</Text>
+            )}
+          </View>
+        </Card>
+      </Reveal>
+
+      <Reveal delay={230}>
+        <Card>
+          <Text style={styles.h}>File complete (top 20)</Text>
+          {booting && (
+            <View style={{ gap: 8, marginTop: 6 }}>
+              <ShimmerLine width="92%" />
+              <ShimmerLine width="88%" />
+              <ShimmerLine width="84%" />
+            </View>
+          )}
+
+          {!booting &&
+            queue.slice(0, 20).map((it, idx) => (
+              <View key={it.id} style={styles.ticketRow}>
+                <Text style={idx === 0 ? styles.next : styles.item}>
+                  {idx + 1}. {it.id}
+                </Text>
+                <Text style={styles.rowMuted}>{fmtMin(it.waitSec ?? 0)}</Text>
+              </View>
+            ))}
+
+          {!booting && !queue.length && <Text style={styles.rowMuted}>Aucun client.</Text>}
+        </Card>
+      </Reveal>
+
+      <Reveal delay={310}>
+        <Card>
+          <Text style={styles.h}>Actions file</Text>
+          <Text style={styles.muted}>Entre la duree du service termine puis appelle le prochain client.</Text>
+
+          <TextInput
+            style={styles.input}
+            value={durationSec}
+            onChangeText={setDurationSec}
+            keyboardType="numeric"
+            placeholder="durationSec"
+            placeholderTextColor={ui.colors.textMuted}
+          />
+
+          <View style={styles.row}>
+            <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
+              <View style={styles.btnRow}>
+                <Ionicons name="arrow-back-outline" size={18} color="white" />
+                <Text style={styles.btnText}>Dashboard</Text>
+              </View>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={togglePause}>
+              <View style={styles.btnRow}>
+                <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
+                <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
+              </View>
+            </Pressable>
+          </View>
+
+          {!state?.open && (
+            <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={open}>
+              <View style={styles.btnRow}>
+                <Ionicons name="lock-open-outline" size={18} color="white" />
+                <Text style={styles.btnText}>Ouvrir la file</Text>
+              </View>
+            </Pressable>
+          )}
+
+          <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={callNext}>
             <View style={styles.btnRow}>
-              <Ionicons name="lock-open-outline" size={18} color="white" />
-              <Text style={styles.btnText}>Ouvrir la file</Text>
+              <Ionicons name="play-forward-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Appeler le prochain</Text>
             </View>
           </Pressable>
-        )}
-      </Card>
 
-      <Card>
-        <Text style={styles.h}>File (top 12)</Text>
-        {queue.slice(0, 12).map((it, idx) => (
-          <Text key={it.id} style={idx === 0 ? styles.next : styles.item}>
-            {idx + 1}. {it.id}
-          </Text>
-        ))}
-        {!queue.length && <Text style={styles.muted}>Aucun client.</Text>}
-      </Card>
+          <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={close}>
+            <View style={styles.btnRow}>
+              <Ionicons name="close-circle-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Fermer et vider la file</Text>
+            </View>
+          </Pressable>
+        </Card>
+      </Reveal>
 
-      <Card>
-        <Text style={styles.h}>Entrainer l ETA (AI)</Text>
-        <Text style={styles.muted}>Entre la duree du service termine (secondes), puis appelle le prochain.</Text>
-        <TextInput
-          style={styles.input}
-          value={durationSec}
-          onChangeText={setDurationSec}
-          keyboardType="numeric"
-          placeholder="durationSec"
-          placeholderTextColor={ui.colors.textMuted}
-        />
-
-        <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={callNext}>
-          <View style={styles.btnRow}>
-            <Ionicons name="play-forward-outline" size={18} color="white" />
-            <Text style={styles.btnText}>Appeler le prochain</Text>
-          </View>
-        </Pressable>
-
-        <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={close}>
-          <View style={styles.btnRow}>
-            <Ionicons name="close-circle-outline" size={18} color="white" />
-            <Text style={styles.btnText}>Fermer la file</Text>
-          </View>
-        </Pressable>
-      </Card>
+      {!!err && (
+        <Reveal delay={360}>
+          <Text style={styles.err}>{err}</Text>
+        </Reveal>
+      )}
     </ScreenShell>
   );
 }
@@ -166,12 +242,29 @@ export default function MerchantQueue() {
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 30 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
-  line: { color: ui.colors.text, fontWeight: "700", marginBottom: 2 },
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 8, flexWrap: "wrap" },
   muted: { color: ui.colors.textMuted, fontSize: 13, marginTop: 6, lineHeight: 18, fontWeight: "600" },
   err: { color: ui.colors.danger, marginTop: 8, fontWeight: "700" },
+  section: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: ui.radius.md,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    backgroundColor: ui.colors.surfaceMuted,
+  },
+  sectionTitle: { color: ui.colors.text, fontWeight: "900", marginBottom: 4 },
+  rowStrong: { color: ui.colors.text, fontWeight: "800" },
+  rowMuted: { color: ui.colors.textMuted, fontWeight: "700", marginTop: 2 },
+  ticketRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  item: { color: ui.colors.textMuted, fontWeight: "700" },
+  next: { fontWeight: "900", color: ui.colors.primaryDeep },
   row: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
-  item: { paddingVertical: 4, color: ui.colors.textMuted, fontWeight: "600" },
-  next: { paddingVertical: 4, fontWeight: "900", color: ui.colors.primaryDeep },
   input: {
     backgroundColor: ui.colors.bgSoft,
     borderRadius: ui.radius.md,

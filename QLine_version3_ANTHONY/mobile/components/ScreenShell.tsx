@@ -60,6 +60,11 @@ export function ScreenShell({
       <View pointerEvents="none" style={styles.bgLayer}>
         <Animated.View style={[styles.blobA, { transform: [{ translateX: blobATranslateX }, { translateY: blobATranslateY }] }]} />
         <Animated.View style={[styles.blobB, { transform: [{ translateX: blobBTranslateX }, { translateY: blobBTranslateY }] }]} />
+        <View style={styles.stripes}>
+          {Array.from({ length: 7 }).map((_, idx) => (
+            <View key={idx} style={styles.stripe} />
+          ))}
+        </View>
       </View>
 
       {scroll ? (
@@ -98,5 +103,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(17,119,70,0.12)",
     bottom: -70,
     left: -50,
+  },
+  stripes: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    opacity: 0.24,
+  },
+  stripe: {
+    width: 1,
+    backgroundColor: "rgba(17,119,70,0.14)",
   },
 });

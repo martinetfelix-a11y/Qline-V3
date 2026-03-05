@@ -6,7 +6,10 @@ import { apiSignup } from "../features/auth/auth.api";
 import { fetchPublicCommerces } from "../features/commerces/commerces.api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { AppHeader } from "../components/AppHeader";
+import { Reveal } from "../components/Reveal";
 import { ScreenShell } from "../components/ScreenShell";
+import { ShimmerLine } from "../components/ShimmerLine";
+import { StatusPill } from "../components/StatusPill";
 import { ui } from "../theme/ui";
 
 type Role = "user" | "merchant";
@@ -20,13 +23,16 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [commerceId, setCommerceId] = useState("c1");
   const [commerces, setCommerces] = useState<any[]>([]);
+  const [loadingCommerces, setLoadingCommerces] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    setLoadingCommerces(true);
     fetchPublicCommerces()
       .then((d) => setCommerces(d.commerces || []))
-      .catch(() => setCommerces([]));
+      .catch(() => setCommerces([]))
+      .finally(() => setLoadingCommerces(false));
   }, []);
 
   const submit = async () => {
@@ -55,81 +61,97 @@ export default function SignupScreen() {
     <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle="Creer un compte" />
 
-      <View style={styles.panel}>
-        <View style={styles.toggleRow}>
-          <Pressable style={[styles.toggle, role === "user" && styles.toggleActive]} onPress={() => setRole("user")}>
-            <Text style={[styles.toggleText, role === "user" && styles.toggleTextActive]}>Utilisateur</Text>
-          </Pressable>
-          <Pressable style={[styles.toggle, role === "merchant" && styles.toggleActive]} onPress={() => setRole("merchant")}>
-            <Text style={[styles.toggleText, role === "merchant" && styles.toggleTextActive]}>Commercant</Text>
-          </Pressable>
+      <Reveal delay={70}>
+        <View style={styles.pillRow}>
+          <StatusPill label={`Mode ${role === "merchant" ? "Commercant" : "Utilisateur"}`} tone={role === "merchant" ? "warning" : "success"} />
+          <StatusPill label="Creation rapide" tone="neutral" />
         </View>
+      </Reveal>
 
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={ui.colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+      <Reveal delay={150}>
+        <View style={styles.panel}>
+          <View style={styles.toggleRow}>
+            <Pressable style={[styles.toggle, role === "user" && styles.toggleActive]} onPress={() => setRole("user")}>
+              <Text style={[styles.toggleText, role === "user" && styles.toggleTextActive]}>Utilisateur</Text>
+            </Pressable>
+            <Pressable style={[styles.toggle, role === "merchant" && styles.toggleActive]} onPress={() => setRole("merchant")}>
+              <Text style={[styles.toggleText, role === "merchant" && styles.toggleTextActive]}>Commercant</Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.passwordRow}>
           <TextInput
-            style={[styles.input, styles.passwordInput]}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Mot de passe (min 6)"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
             placeholderTextColor={ui.colors.textMuted}
-            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            keyboardType="email-address"
           />
-          <Pressable
-            style={styles.eyeButton}
-            onPress={() => setShowPassword((prev) => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-          >
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={ui.colors.textMuted} />
+
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mot de passe (min 6)"
+              placeholderTextColor={ui.colors.textMuted}
+              secureTextEntry={!showPassword}
+            />
+            <Pressable
+              style={styles.eyeButton}
+              onPress={() => setShowPassword((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            >
+              <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={ui.colors.textMuted} />
+            </Pressable>
+          </View>
+
+          {role === "merchant" && (
+            <View style={styles.box}>
+              <Text style={styles.h}>Commerce lie</Text>
+              <Text style={styles.muted}>Choisis le commerce auquel le compte commercant appartient.</Text>
+              {loadingCommerces && (
+                <View style={{ gap: 8, marginBottom: 8 }}>
+                  <ShimmerLine width="84%" />
+                  <ShimmerLine width="78%" />
+                </View>
+              )}
+              <View style={styles.rowWrap}>
+                {commerces.map((c) => (
+                  <Pressable key={c.id} style={[styles.pill, commerceId === c.id && styles.pillActive]} onPress={() => setCommerceId(c.id)}>
+                    <Text style={[styles.pillText, commerceId === c.id && styles.pillTextActive]}>{c.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {error && <Text style={styles.err}>{error}</Text>}
+
+          <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
+            <View style={styles.btnRow}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="white" />
+              <Text style={styles.btnText}>{loading ? "..." : "Creer le compte"}</Text>
+            </View>
+          </Pressable>
+
+          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.replace("/login")}>
+            <View style={styles.btnRow}>
+              <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+              <Text style={styles.btnAltText}>Retour login</Text>
+            </View>
           </Pressable>
         </View>
-
-        {role === "merchant" && (
-          <View style={styles.box}>
-            <Text style={styles.h}>Commerce lie</Text>
-            <Text style={styles.muted}>Choisis le commerce auquel le compte commercant appartient.</Text>
-            <View style={styles.rowWrap}>
-              {commerces.map((c) => (
-                <Pressable key={c.id} style={[styles.pill, commerceId === c.id && styles.pillActive]} onPress={() => setCommerceId(c.id)}>
-                  <Text style={[styles.pillText, commerceId === c.id && styles.pillTextActive]}>{c.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {error && <Text style={styles.err}>{error}</Text>}
-
-        <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
-          <View style={styles.btnRow}>
-            <Ionicons name="checkmark-circle-outline" size={18} color="white" />
-            <Text style={styles.btnText}>{loading ? "..." : "Creer le compte"}</Text>
-          </View>
-        </Pressable>
-
-        <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.replace("/login")}>
-          <View style={styles.btnRow}>
-            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
-            <Text style={styles.btnAltText}>Retour login</Text>
-          </View>
-        </Pressable>
-      </View>
+      </Reveal>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 28 },
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap" },
   panel: {
     backgroundColor: ui.colors.surface,
     borderRadius: ui.radius.xl,

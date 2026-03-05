@@ -5,7 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { apiLogin } from "../features/auth/auth.api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { AppHeader } from "../components/AppHeader";
+import { Reveal } from "../components/Reveal";
 import { ScreenShell } from "../components/ScreenShell";
+import { StatusPill } from "../components/StatusPill";
 import { ui } from "../theme/ui";
 
 export default function LoginScreen() {
@@ -35,68 +37,80 @@ export default function LoginScreen() {
     <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle="Connexion" />
 
-      <View style={styles.panel}>
-        <Text style={styles.sub}>Connecte-toi pour acceder a ton espace client ou commerant.</Text>
+      <Reveal delay={70}>
+        <View style={styles.pillRow}>
+          <StatusPill label="Connexion securisee" tone="success" />
+          <StatusPill label="Ticket virtuel" tone="neutral" />
+        </View>
+      </Reveal>
 
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={ui.colors.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+      <Reveal delay={150}>
+        <View style={styles.panel}>
+          <Text style={styles.sub}>Connecte-toi pour acceder a ton espace client ou commercant.</Text>
 
-        <View style={styles.passwordRow}>
           <TextInput
-            style={[styles.input, styles.passwordInput]}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Mot de passe"
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
             placeholderTextColor={ui.colors.textMuted}
-            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            keyboardType="email-address"
           />
-          <Pressable
-            style={styles.eyeButton}
-            onPress={() => setShowPassword((prev) => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-          >
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={ui.colors.textMuted} />
+
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mot de passe"
+              placeholderTextColor={ui.colors.textMuted}
+              secureTextEntry={!showPassword}
+            />
+            <Pressable
+              style={styles.eyeButton}
+              onPress={() => setShowPassword((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            >
+              <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={ui.colors.textMuted} />
+            </Pressable>
+          </View>
+
+          {error && <Text style={styles.err}>{error}</Text>}
+
+          <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
+            <View style={styles.btnRow}>
+              <Ionicons name="log-in-outline" size={18} color="white" />
+              <Text style={styles.btnText}>{loading ? "..." : "Se connecter"}</Text>
+            </View>
+          </Pressable>
+
+          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.push("/signup")}>
+            <View style={styles.btnRow}>
+              <Ionicons name="person-add-outline" size={18} color={ui.colors.primaryDeep} />
+              <Text style={styles.btnAltText}>Creer un compte</Text>
+            </View>
           </Pressable>
         </View>
+      </Reveal>
 
-        {error && <Text style={styles.err}>{error}</Text>}
-
-        <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
-          <View style={styles.btnRow}>
-            <Ionicons name="log-in-outline" size={18} color="white" />
-            <Text style={styles.btnText}>{loading ? "..." : "Se connecter"}</Text>
-          </View>
-        </Pressable>
-
-        <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.push("/signup")}>
-          <View style={styles.btnRow}>
-            <Ionicons name="person-add-outline" size={18} color={ui.colors.primaryDeep} />
-            <Text style={styles.btnAltText}>Creer un compte</Text>
-          </View>
-        </Pressable>
-      </View>
-
-      <View style={styles.hintBox}>
-        <Text style={styles.hintTitle}>Comptes test</Text>
-        <Text style={styles.hint}>User: user@qline.dev / user1234</Text>
-        <Text style={styles.hint}>Merchant c1: c1@qline.dev / merchant123</Text>
-        <Text style={styles.hint}>Merchant c2: c2@qline.dev / merchant123</Text>
-        <Text style={styles.hint}>Merchant c3: c3@qline.dev / merchant123</Text>
-      </View>
+      <Reveal delay={230}>
+        <View style={styles.hintBox}>
+          <Text style={styles.hintTitle}>Comptes test</Text>
+          <Text style={styles.hint}>User: user@qline.dev / user1234</Text>
+          <Text style={styles.hint}>Merchant c1: c1@qline.dev / merchant123</Text>
+          <Text style={styles.hint}>Merchant c2: c2@qline.dev / merchant123</Text>
+          <Text style={styles.hint}>Merchant c3: c3@qline.dev / merchant123</Text>
+        </View>
+      </Reveal>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 30, justifyContent: "center", flexGrow: 1 },
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap" },
   panel: {
     backgroundColor: ui.colors.surface,
     borderRadius: ui.radius.xl,

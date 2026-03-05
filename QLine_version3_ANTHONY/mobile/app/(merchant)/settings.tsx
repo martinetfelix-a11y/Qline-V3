@@ -6,7 +6,10 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantOpen, merchantClose, merchantPause, merchantSetAvg } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
+import { ShimmerLine } from "../../components/ShimmerLine";
+import { StatusPill } from "../../components/StatusPill";
 import { ui } from "../../theme/ui";
 
 export default function MerchantSettings() {
@@ -77,76 +80,100 @@ export default function MerchantSettings() {
     <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle={`Parametres - ${commerceId}`} />
 
-      <Card>
-        <Text style={styles.h}>Compte</Text>
-        <Text style={styles.line}>Email: {auth?.email ?? "-"}</Text>
-        <Text style={styles.line}>Role: {auth?.role ?? "-"}</Text>
-        <Text style={styles.line}>CommerceId: {auth?.commerceId ?? "-"}</Text>
+      <Reveal delay={90}>
+        <Card>
+          <Text style={styles.h}>Compte</Text>
+          <Text style={styles.line}>Email: {auth?.email ?? "-"}</Text>
+          <Text style={styles.line}>Role: {auth?.role ?? "-"}</Text>
+          <Text style={styles.line}>CommerceId: {auth?.commerceId ?? "-"}</Text>
 
-        <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
-          <View style={styles.btnRow}>
-            <Ionicons name="arrow-back-outline" size={18} color="white" />
-            <Text style={styles.btnText}>Retour dashboard</Text>
+          <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={() => router.back()}>
+            <View style={styles.btnRow}>
+              <Ionicons name="arrow-back-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Retour dashboard</Text>
+            </View>
+          </Pressable>
+        </Card>
+      </Reveal>
+
+      <Reveal delay={170}>
+        <Card>
+          <Text style={styles.h}>Etat de la file</Text>
+          <View style={styles.pillRow}>
+            <StatusPill label={state?.open ? "Ouverte" : "Fermee"} tone={state?.open ? "success" : "danger"} />
+            <StatusPill label={state?.paused ? "En pause" : "Active"} tone={state?.paused ? "warning" : "success"} />
           </View>
-        </Pressable>
-      </Card>
 
-      <Card>
-        <Text style={styles.h}>Etat de la file</Text>
-        <Text style={styles.line}>Ouverte: {state ? (state.open ? "Oui" : "Non") : "-"}</Text>
-        <Text style={styles.line}>En pause: {state ? (state.paused ? "Oui" : "Non") : "-"}</Text>
+          {!state && (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <ShimmerLine width="65%" />
+              <ShimmerLine width="70%" />
+            </View>
+          )}
 
-        <View style={styles.row}>
-          <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={doOpen}>
+          <View style={styles.row}>
+            <Pressable style={({ pressed }) => [styles.btnGreen, pressed && styles.btnGreenPressed]} onPress={doOpen}>
+              <View style={styles.btnRow}>
+                <Ionicons name="lock-open-outline" size={18} color="white" />
+                <Text style={styles.btnText}>Ouvrir</Text>
+              </View>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={doTogglePause}>
+              <View style={styles.btnRow}>
+                <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
+                <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
+              </View>
+            </Pressable>
+          </View>
+
+          <Text style={styles.muted}>La pause bloque les nouveaux tickets sans vider la file.</Text>
+        </Card>
+      </Reveal>
+
+      <Reveal delay={250}>
+        <Card>
+          <Text style={styles.h}>Modele ETA (IA)</Text>
+          <Text style={styles.muted}>Definis une moyenne initiale (en minutes). Le modele s ajuste ensuite avec les durees reelles.</Text>
+          <TextInput
+            style={styles.input}
+            value={avgMin}
+            onChangeText={setAvgMin}
+            keyboardType="numeric"
+            placeholder="avg minutes"
+            placeholderTextColor={ui.colors.textMuted}
+          />
+          <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={doSetAvg}>
             <View style={styles.btnRow}>
-              <Ionicons name="lock-open-outline" size={18} color="white" />
-              <Text style={styles.btnText}>Ouvrir</Text>
+              <Ionicons name="refresh-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Mettre a jour</Text>
             </View>
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={doTogglePause}>
-            <View style={styles.btnRow}>
-              <Ionicons name={state?.paused ? "play-circle-outline" : "pause-circle-outline"} size={18} color="white" />
-              <Text style={styles.btnText}>{state?.paused ? "Reprendre" : "Pause"}</Text>
-            </View>
-          </Pressable>
+        </Card>
+      </Reveal>
+
+      <Reveal delay={290}>
+        <Card>
+          <Text style={styles.h}>Danger zone</Text>
+          <Text style={styles.muted}>Fermer la file supprime les rendez-vous en attente.</Text>
           <Pressable style={({ pressed }) => [styles.btnDanger, pressed && styles.btnDangerPressed]} onPress={doClose}>
             <View style={styles.btnRow}>
               <Ionicons name="close-circle-outline" size={18} color="white" />
-              <Text style={styles.btnText}>Fermer</Text>
+              <Text style={styles.btnText}>Fermer et vider la file</Text>
             </View>
           </Pressable>
-        </View>
-
-        <Text style={styles.muted}>La pause bloque les nouveaux tickets sans vider la file.</Text>
-      </Card>
-
-      <Card>
-        <Text style={styles.h}>Modele ETA (IA)</Text>
-        <Text style={styles.muted}>Definis une moyenne initiale (en minutes). Le modele s ajuste ensuite avec les durees reelles.</Text>
-        <TextInput
-          style={styles.input}
-          value={avgMin}
-          onChangeText={setAvgMin}
-          keyboardType="numeric"
-          placeholder="avg minutes"
-          placeholderTextColor={ui.colors.textMuted}
-        />
-        <Pressable style={({ pressed }) => [styles.btnDark, pressed && styles.btnDarkPressed]} onPress={doSetAvg}>
-          <View style={styles.btnRow}>
-            <Ionicons name="refresh-outline" size={18} color="white" />
-            <Text style={styles.btnText}>Mettre a jour</Text>
-          </View>
-        </Pressable>
-      </Card>
+        </Card>
+      </Reveal>
 
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
-      <Pressable style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]} onPress={doLogout}>
-        <View style={styles.btnRow}>
-          <Ionicons name="log-out-outline" size={18} color="white" />
-          <Text style={styles.btnText}>Retour au login</Text>
-        </View>
-      </Pressable>
+      <Reveal delay={360}>
+        <Pressable style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]} onPress={doLogout}>
+          <View style={styles.btnRow}>
+            <Ionicons name="log-out-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Retour au login</Text>
+          </View>
+        </Pressable>
+      </Reveal>
     </ScreenShell>
   );
 }
@@ -155,6 +182,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 30 },
   h: { fontSize: 18, fontWeight: "900", marginBottom: 8, color: ui.colors.text },
   line: { color: ui.colors.text, fontWeight: "700", marginBottom: 2 },
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 6, flexWrap: "wrap" },
   muted: { color: ui.colors.textMuted, fontSize: 13, marginTop: 8, lineHeight: 18, fontWeight: "600" },
   msg: {
     marginTop: 2,
