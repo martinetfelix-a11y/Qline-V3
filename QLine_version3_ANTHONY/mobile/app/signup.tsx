@@ -5,6 +5,8 @@ import { apiSignup } from "../features/auth/auth.api";
 import { fetchPublicCommerces } from "../features/commerces/commerces.api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { AppHeader } from "../components/AppHeader";
+import { Ionicons } from "@expo/vector-icons";
+
 
 type Role = "user" | "merchant";
 
@@ -14,6 +16,7 @@ export default function SignupScreen() {
   const [role, setRole] = useState<Role>("user");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [commerceId, setCommerceId] = useState("c1");
   const [commerces, setCommerces] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,23 @@ export default function SignupScreen() {
       </View>
 
       <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" autoCapitalize="none" />
-      <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Mot de passe (min 6)" secureTextEntry />
+      <View style={styles.passwordRow}>
+        <TextInput
+          style={[styles.input, styles.passwordInput]}
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Mot de passe (min 6)"
+          secureTextEntry={!showPassword}
+        />
+        <Pressable
+          style={styles.eyeButton}
+          onPress={() => setShowPassword((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+        >
+          <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#6b7280" />
+        </Pressable>
+      </View>
 
       {role === "merchant" && (
         <View style={styles.box}>
@@ -98,6 +117,22 @@ const styles = StyleSheet.create({
   toggleText: { fontWeight: "800", color: "#374151" },
   toggleTextActive: { color: "#15803d" },
   input: { backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#e5e7eb", marginBottom: 10 },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    marginBottom: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
+  eyeButton: { paddingHorizontal: 12, paddingVertical: 12 },
   box: { backgroundColor: "white", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "#e5e7eb", marginTop: 6, marginBottom: 10 },
   h: { fontSize: 14, fontWeight: "800", marginBottom: 6 },
   muted: { color: "#6b7280", fontSize: 12, marginBottom: 10 },
