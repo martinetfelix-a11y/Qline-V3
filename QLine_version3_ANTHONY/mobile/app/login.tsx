@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { apiLogin } from "../features/auth/auth.api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { AppHeader } from "../components/AppHeader";
-import { Ionicons } from "@expo/vector-icons";
-
+import { Reveal } from "../components/Reveal";
+import { ScreenShell } from "../components/ScreenShell";
+import { StatusPill } from "../components/StatusPill";
+import { ui } from "../theme/ui";
 
 export default function LoginScreen() {
   const { setAuth } = useAuth();
@@ -31,62 +34,110 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScreenShell contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle="Connexion" />
 
-      <Text style={styles.sub}>Login unique → redirige User ou Merchant</Text>
+      <Reveal delay={70}>
+        <View style={styles.pillRow}>
+          <StatusPill label="Connexion securisee" tone="success" />
+          <StatusPill label="Ticket virtuel" tone="neutral" />
+        </View>
+      </Reveal>
 
-      <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" autoCapitalize="none" />
-      <View style={styles.passwordRow}>
-        <TextInput
-          style={[styles.input, styles.passwordInput]}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Mot de passe"
-          secureTextEntry={!showPassword}
-        />
-        <Pressable
-          style={styles.eyeButton}
-          onPress={() => setShowPassword((prev) => !prev)}
-          accessibilityRole="button"
-          accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-        >
-          <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#6b7280" />
-        </Pressable>
-      </View>
+      <Reveal delay={150}>
+        <View style={styles.panel}>
+          <Text style={styles.sub}>Connecte-toi pour acceder a ton espace client ou commercant.</Text>
 
-      {error && <Text style={styles.err}>{error}</Text>}
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            placeholderTextColor={ui.colors.textMuted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-      <Pressable style={styles.btn} onPress={submit} disabled={loading}>
-        <Text style={styles.btnText}>{loading ? "..." : "Se connecter"}</Text>
-      </Pressable>
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Mot de passe"
+              placeholderTextColor={ui.colors.textMuted}
+              secureTextEntry={!showPassword}
+            />
+            <Pressable
+              style={styles.eyeButton}
+              onPress={() => setShowPassword((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            >
+              <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={ui.colors.textMuted} />
+            </Pressable>
+          </View>
 
-      <Pressable style={styles.btnAlt} onPress={() => router.push("/signup")}>
-        <Text style={styles.btnAltText}>Créer un compte</Text>
-      </Pressable>
+          {error && <Text style={styles.err}>{error}</Text>}
 
-      <View style={{ marginTop: 14 }}>
-        <Text style={styles.hint}>Comptes test:</Text>
-        <Text style={styles.hint}>User: user@qline.dev / user1234</Text>
-        <Text style={styles.hint}>Merchant c1: c1@qline.dev / merchant123</Text>
-        <Text style={styles.hint}>Merchant c2: c2@qline.dev / merchant123</Text>
-        <Text style={styles.hint}>Merchant c3: c3@qline.dev / merchant123</Text>
-      </View>
-    </View>
+          <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={submit} disabled={loading}>
+            <View style={styles.btnRow}>
+              <Ionicons name="log-in-outline" size={18} color="white" />
+              <Text style={styles.btnText}>{loading ? "..." : "Se connecter"}</Text>
+            </View>
+          </Pressable>
+
+          <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.push("/signup")}>
+            <View style={styles.btnRow}>
+              <Ionicons name="person-add-outline" size={18} color={ui.colors.primaryDeep} />
+              <Text style={styles.btnAltText}>Creer un compte</Text>
+            </View>
+          </Pressable>
+        </View>
+      </Reveal>
+
+      <Reveal delay={230}>
+        <View style={styles.hintBox}>
+          <Text style={styles.hintTitle}>Comptes test</Text>
+          <Text style={styles.hint}>User: user@qline.dev / user1234</Text>
+          <Text style={styles.hint}>Merchant c1: c1@qline.dev / merchant123</Text>
+          <Text style={styles.hint}>Merchant c2: c2@qline.dev / merchant123</Text>
+          <Text style={styles.hint}>Merchant c3: c3@qline.dev / merchant123</Text>
+        </View>
+      </Reveal>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: "center", backgroundColor: "#f3f4f6" },
-  sub: { color: "#6b7280", marginBottom: 18 },
-  input: { backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#e5e7eb", marginBottom: 10 },
+  content: { padding: 20, paddingBottom: 30, justifyContent: "center", flexGrow: 1 },
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap" },
+  panel: {
+    backgroundColor: ui.colors.surface,
+    borderRadius: ui.radius.xl,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    padding: ui.spacing.lg,
+    ...ui.shadow.card,
+  },
+  sub: { color: ui.colors.textMuted, marginBottom: 14, lineHeight: 20, fontWeight: "600" },
+  input: {
+    backgroundColor: ui.colors.bgSoft,
+    borderRadius: ui.radius.md,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    marginBottom: 10,
+    color: ui.colors.text,
+    fontWeight: "600",
+  },
   passwordRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: ui.colors.bgSoft,
+    borderRadius: ui.radius.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: ui.colors.border,
     marginBottom: 10,
   },
   passwordInput: {
@@ -96,10 +147,37 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   eyeButton: { paddingHorizontal: 12, paddingVertical: 12 },
-  btn: { backgroundColor: "#22c55e", borderRadius: 999, padding: 14, alignItems: "center", marginTop: 8 },
-  btnText: { color: "white", fontWeight: "800" },
-  btnAlt: { backgroundColor: "#111827", borderRadius: 999, padding: 14, alignItems: "center", marginTop: 10 },
-  btnAltText: { color: "white", fontWeight: "800" },
-  err: { color: "#b91c1c", marginBottom: 8 },
-  hint: { fontSize: 12, color: "#6b7280" }
+  btn: {
+    backgroundColor: ui.colors.primary,
+    borderRadius: ui.radius.pill,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 6,
+    ...ui.shadow.soft,
+  },
+  btnPressed: { backgroundColor: ui.colors.primaryPressed },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  btnText: { color: "white", fontWeight: "900", letterSpacing: 0.2 },
+  btnAlt: {
+    backgroundColor: ui.colors.surfaceMuted,
+    borderRadius: ui.radius.pill,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: ui.colors.borderStrong,
+  },
+  btnAltPressed: { backgroundColor: ui.colors.primarySoft },
+  btnAltText: { color: ui.colors.primaryDeep, fontWeight: "900", letterSpacing: 0.2 },
+  err: { color: ui.colors.danger, marginBottom: 8, fontWeight: "700" },
+  hintBox: {
+    marginTop: 14,
+    backgroundColor: ui.colors.surfaceMuted,
+    borderRadius: ui.radius.lg,
+    padding: ui.spacing.md,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+  },
+  hintTitle: { fontSize: 12, color: ui.colors.text, marginBottom: 6, fontWeight: "800" },
+  hint: { fontSize: 12, color: ui.colors.textMuted, marginBottom: 4, fontWeight: "600" },
 });

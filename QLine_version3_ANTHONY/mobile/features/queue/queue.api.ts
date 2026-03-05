@@ -27,6 +27,22 @@ export async function getQueueState(token: string, commerceId: string, ticketId?
   return r.json();
 }
 
+export async function cancelQueueTicket(token: string, commerceId: string, ticketId?: string) {
+  const r = await fetch(`${API_BASE}/queue/cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ commerceId, ...(ticketId ? { ticketId } : {}) }),
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw Object.assign(new Error("cancel_failed"), { code: j.error || "cancel_failed" });
+  }
+  return r.json();
+}
+
 export async function merchantNext(token: string, commerceId: string, durationSec?: number) {
   const r = await fetch(`${API_BASE}/queue/next`, {
     method: "POST",

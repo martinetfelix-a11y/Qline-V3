@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { BarCodeScanner } from "expo-barcode-scanner";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useUserQueue } from "../../features/queue/userQueue.store";
+import { Reveal } from "../../components/Reveal";
+import { ScreenShell } from "../../components/ScreenShell";
+import { StatusPill } from "../../components/StatusPill";
+import { ui } from "../../theme/ui";
 
 function extractCommerceId(data: string): string | null {
   const trimmed = data.trim();
@@ -36,62 +41,163 @@ export default function ScanScreen() {
       setMsg("QR invalide. Ex: c1 ou qline://join?commerceId=c1");
       return;
     }
-    setMsg(`Commerce détecté: ${cid}. Rejoindre...`);
+    setMsg(`Commerce detecte: ${cid}. Rejoindre...`);
     await q.join(cid);
-    router.replace("/(user)/home");
+    router.replace("/(user)/tickets");
   };
 
   if (hasPermission === null) {
     return (
-      <View style={styles.container}>
-        <Text>Demande permission caméra...</Text>
-      </View>
+      <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
+        <Text style={styles.stateText}>Demande permission camera...</Text>
+      </ScreenShell>
     );
   }
 
   if (hasPermission === false) {
     return (
-      <View style={styles.container}>
-        <Text>Accès caméra refusé.</Text>
-        <Pressable style={styles.btnAlt} onPress={() => router.back()}>
-          <Text style={styles.btnAltText}>Retour</Text>
+      <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
+        <Text style={styles.stateText}>Acces camera refuse.</Text>
+        <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
+          <View style={styles.rowBtn}>
+            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Retour</Text>
+          </View>
         </Pressable>
-      </View>
+      </ScreenShell>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Scanner un QR</Text>
-      <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
+    <ScreenShell scroll={false} contentContainerStyle={styles.content}>
+      <Reveal delay={70}>
+        <View style={styles.badgeRow}>
+          <StatusPill label={scanned ? "Scan termine" : "Scan en cours"} tone={scanned ? "warning" : "success"} />
+          <StatusPill label="QR commerce" tone="neutral" />
+        </View>
+      </Reveal>
 
-      <View style={styles.scanner}>
-        <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
-      </View>
+      <Reveal delay={130}>
+        <View style={styles.hero}>
+          <Text style={styles.title}>Scanner un QR</Text>
+          <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
+        </View>
+      </Reveal>
+
+      <Reveal delay={190}>
+        <View style={styles.scannerShell}>
+          <View style={styles.scanner}>
+            <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerTL]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerTR]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerBL]} />
+            <View pointerEvents="none" style={[styles.corner, styles.cornerBR]} />
+          </View>
+        </View>
+      </Reveal>
 
       {!!msg && <Text style={styles.msg}>{msg}</Text>}
 
       {scanned && (
-        <Pressable style={styles.btn} onPress={() => { setScanned(false); setMsg(""); }}>
-          <Text style={styles.btnText}>Scanner encore</Text>
-        </Pressable>
+        <Reveal delay={240}>
+          <Pressable
+            style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
+            onPress={() => {
+              setScanned(false);
+              setMsg("");
+            }}
+          >
+            <View style={styles.rowBtn}>
+              <Ionicons name="scan-outline" size={18} color="white" />
+              <Text style={styles.btnText}>Scanner encore</Text>
+            </View>
+          </Pressable>
+        </Reveal>
       )}
 
-      <Pressable style={styles.btnAlt} onPress={() => router.back()}>
-        <Text style={styles.btnAltText}>Retour</Text>
-      </Pressable>
-    </View>
+      <Reveal delay={260}>
+        <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
+          <View style={styles.rowBtn}>
+            <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
+            <Text style={styles.btnAltText}>Retour</Text>
+          </View>
+        </Pressable>
+      </Reveal>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#f3f4f6" },
-  title: { fontSize: 24, fontWeight: "800", marginBottom: 6 },
-  muted: { color: "#6b7280", marginBottom: 12 },
-  scanner: { height: 360, borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#e5e7eb", backgroundColor: "black" },
-  msg: { marginTop: 12, color: "#111827", fontWeight: "700" },
-  btn: { backgroundColor: "#22c55e", borderRadius: 999, padding: 14, alignItems: "center", marginTop: 12 },
-  btnText: { color: "white", fontWeight: "800" },
-  btnAlt: { backgroundColor: "#111827", borderRadius: 999, padding: 14, alignItems: "center", marginTop: 10 },
-  btnAltText: { color: "white", fontWeight: "800" }
+  content: {
+    padding: 16,
+  },
+  centerContent: {
+    flex: 1,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeRow: { flexDirection: "row", gap: 8, marginBottom: 8, flexWrap: "wrap" },
+  hero: {
+    marginBottom: 10,
+    backgroundColor: ui.colors.surface,
+    borderRadius: ui.radius.lg,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    padding: ui.spacing.md,
+    ...ui.shadow.soft,
+  },
+  stateText: { color: ui.colors.text, fontWeight: "700" },
+  title: { fontSize: 24, fontWeight: "900", marginBottom: 6, color: ui.colors.text },
+  muted: { color: ui.colors.textMuted, lineHeight: 18, fontWeight: "600" },
+  scannerShell: {
+    borderRadius: ui.radius.xl,
+    padding: 8,
+    backgroundColor: ui.colors.surface,
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    ...ui.shadow.card,
+  },
+  scanner: {
+    height: 360,
+    borderRadius: ui.radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: ui.colors.border,
+    backgroundColor: "black",
+  },
+  corner: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderColor: "rgba(255,255,255,0.95)",
+    borderWidth: 3,
+  },
+  cornerTL: { top: 14, left: 14, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+  cornerTR: { top: 14, right: 14, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+  cornerBL: { bottom: 14, left: 14, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+  cornerBR: { bottom: 14, right: 14, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+  msg: { marginTop: 12, color: ui.colors.text, fontWeight: "700" },
+  btn: {
+    backgroundColor: ui.colors.primary,
+    borderRadius: ui.radius.pill,
+    padding: 14,
+    alignItems: "center",
+    marginTop: 14,
+    ...ui.shadow.soft,
+  },
+  btnPressed: { backgroundColor: ui.colors.primaryPressed },
+  rowBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
+  btnText: { color: "white", fontWeight: "900" },
+  btnAlt: {
+    backgroundColor: ui.colors.surface,
+    borderRadius: ui.radius.pill,
+    padding: 14,
+    alignItems: "center",
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: ui.colors.borderStrong,
+  },
+  btnAltPressed: { backgroundColor: ui.colors.primarySoft },
+  btnAltText: { color: ui.colors.primaryDeep, fontWeight: "900" },
 });
