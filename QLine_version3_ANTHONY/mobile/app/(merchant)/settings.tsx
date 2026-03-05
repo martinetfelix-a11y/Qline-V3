@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, TextInput } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantOpen, merchantClose, merchantPause, merchantSetAvg } from "../../features/queue/queue.api";
@@ -71,7 +71,7 @@ export default function MerchantSettings() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <AppHeader subtitle={`Paramètres — ${commerceId}`} />
 
       <Card>
@@ -119,12 +119,13 @@ export default function MerchantSettings() {
       <Pressable style={styles.logout} onPress={doLogout}>
         <Text style={styles.btnText}>Retour au login</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#f3f4f6" },
+  container: { flex: 1, backgroundColor: "#f3f4f6" },
+  content: { padding: 16, paddingBottom: 24 },
   h: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
   muted: { color: "#6b7280", fontSize: 12, marginTop: 6 },
   msg: { marginTop: 10, fontWeight: "800", color: "#111827" },
