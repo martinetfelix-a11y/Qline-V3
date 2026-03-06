@@ -1,0 +1,6 @@
+**/.expo/
+**/.expo/**
+QLine_version3_ANTHONY/mobile/node_modules/
+QLine_version3_ANTHONY/backend/data/*.sqlite
+QLine_version3_ANTHONY/backend/data/*.sqlite-wal
+QLine_version3_ANTHONY/backend/data/*.sqlite-shm

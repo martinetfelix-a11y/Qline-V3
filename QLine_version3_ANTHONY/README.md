@@ -1,4 +1,4 @@
-# QLine V2 (User vs Merchant distinct + QR)
+# QLine V3 (SQLite locale)
 
 ## Backend
 ```bash
@@ -6,24 +6,30 @@ cd backend
 npm install
 npm run dev
 ```
-Test: http://localhost:3000/health -> {"ok":true}
 
-Accounts (seed):
-- User: user@qline.dev / user1234
-- Merchant c1: c1@qline.dev / merchant123
-- Merchant c2: c2@qline.dev / merchant123
-- Merchant c3: c3@qline.dev / merchant123
+Health:
+- `http://localhost:3000/health`
 
-## Mobile
+SQLite:
+- fichier base: `backend/data/qline.sqlite`
+- toutes les donnees backend passent par SQLite (users, commerces, tickets, events, stats, etat commerce)
+
+Variables utiles:
+- `PORT` (default `3000`)
+- `DB_PATH` (default `backend/data/qline.sqlite`)
+- `JWT_SECRET`
+
+## Mobile (Expo SDK 54)
 ```bash
 cd mobile
 npm install
 npx expo start -c
 ```
 
-Phone real: edit `mobile/features/config.ts` API_BASE -> your PC LAN IP.
+`mobile/features/config.ts` pointe sur `http://localhost:3000`.
 
-QR formats:
-- c1
-- qline://join?commerceId=c2
-- https://qline.app/join?commerceId=c3
+## Comptes seed
+- `user@qline.dev / user1234`
+- `c1@qline.dev / merchant123`
+- `c2@qline.dev / merchant123`
+- `c3@qline.dev / merchant123`

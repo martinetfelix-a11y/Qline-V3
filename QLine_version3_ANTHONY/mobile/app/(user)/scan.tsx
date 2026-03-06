@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { BarCodeScanner } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useUserQueue } from "../../features/queue/userQueue.store";
@@ -23,15 +23,12 @@ function extractCommerceId(data: string): string | null {
 
 export default function ScanScreen() {
   const q = useUserQueue();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [msg, setMsg] = useState<string>("");
 
   useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === "granted");
-    })();
+    requestPermission();
   }, []);
 
   const onScan = async ({ data }: { data: string }) => {
@@ -46,7 +43,7 @@ export default function ScanScreen() {
     router.replace("/(user)/tickets");
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Demande permission camera...</Text>
@@ -54,7 +51,7 @@ export default function ScanScreen() {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Acces camera refuse.</Text>
@@ -87,7 +84,12 @@ export default function ScanScreen() {
       <Reveal delay={190}>
         <View style={styles.scannerShell}>
           <View style={styles.scanner}>
-            <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
+            <CameraView
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              onBarcodeScanned={scanned ? undefined : onScan}
+              style={{ flex: 1 }}
+            />
             <View pointerEvents="none" style={[styles.corner, styles.cornerTL]} />
             <View pointerEvents="none" style={[styles.corner, styles.cornerTR]} />
             <View pointerEvents="none" style={[styles.corner, styles.cornerBL]} />

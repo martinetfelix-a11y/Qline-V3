@@ -1,6 +1,6 @@
 const { Router } = require("express");
-const { db } = require("../db");
 const { requireAuth } = require("../auth");
+const { hasCommerce, listEventsBetween, waitingCount } = require("../db");
 
 const statsRouter = Router();
 
@@ -19,7 +19,7 @@ function fmtMin(sec) {
 statsRouter.get("/kpis", requireAuth, (req, res) => {
   const commerceId = String(req.query.commerceId || "");
   const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
   if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
     return res.status(403).json({ error: "wrong_commerce" });
@@ -27,24 +27,23 @@ statsRouter.get("/kpis", requireAuth, (req, res) => {
 
   const from = startOfDayMs(day);
   const to = endOfDayMs(day);
-  const events = db.events[commerceId].filter(e => e.t >= from && e.t <= to);
+  const events = listEventsBetween(commerceId, from, to);
   const served = events.filter(e => e.type === "served");
   const joins = events.filter(e => e.type === "join");
 
-  const waitingNow = (db.queues[commerceId] || []).length;
   const servedToday = served.length;
   const joinedToday = joins.length;
 
   const durations = served.map(s => s.durationSec).filter(n => typeof n === "number");
-  const avgService = durations.length ? durations.reduce((a,b)=>a+b,0)/durations.length : null;
+  const avgService = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
 
-  const sorted = durations.slice().sort((a,b)=>a-b);
-  const p90 = sorted.length ? sorted[Math.floor(0.9*(sorted.length-1))] : null;
+  const sorted = durations.slice().sort((a, b) => a - b);
+  const p90 = sorted.length ? sorted[Math.floor(0.9 * (sorted.length - 1))] : null;
 
   res.json({
     commerceId,
     day,
-    waitingNow,
+    waitingNow: waitingCount(commerceId),
     joinedToday,
     servedToday,
     avgServiceMin: avgService ? fmtMin(avgService) : null,
@@ -55,7 +54,7 @@ statsRouter.get("/kpis", requireAuth, (req, res) => {
 statsRouter.get("/timeseries", requireAuth, (req, res) => {
   const commerceId = String(req.query.commerceId || "");
   const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
   if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
     return res.status(403).json({ error: "wrong_commerce" });
@@ -65,7 +64,7 @@ statsRouter.get("/timeseries", requireAuth, (req, res) => {
   const to = endOfDayMs(day);
 
   const bins = Array.from({ length: 24 }, (_, h) => ({ hour: h, join: 0, served: 0 }));
-  const events = db.events[commerceId].filter(e => e.t >= from && e.t <= to);
+  const events = listEventsBetween(commerceId, from, to);
 
   for (const e of events) {
     const h = new Date(e.t).getHours();
@@ -79,7 +78,7 @@ statsRouter.get("/timeseries", requireAuth, (req, res) => {
 statsRouter.get("/distribution", requireAuth, (req, res) => {
   const commerceId = String(req.query.commerceId || "");
   const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
   if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
     return res.status(403).json({ error: "wrong_commerce" });
@@ -87,7 +86,7 @@ statsRouter.get("/distribution", requireAuth, (req, res) => {
 
   const from = startOfDayMs(day);
   const to = endOfDayMs(day);
-  const served = db.events[commerceId].filter(e => e.type === "served" && e.t >= from && e.t <= to);
+  const served = listEventsBetween(commerceId, from, to).filter(e => e.type === "served");
 
   const durations = served.map(s => s.durationSec).filter(n => typeof n === "number");
   const bins = [];

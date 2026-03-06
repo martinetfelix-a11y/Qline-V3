@@ -7,7 +7,9 @@ const { queueRouter } = require("./routes/queue");
 const { statsRouter } = require("./routes/stats");
 
 const app = express();
-app.use(cors());
+const corsOrigin = process.env.CORS_ORIGIN || "*";
+const corsOptions = corsOrigin === "*" ? {} : { origin: corsOrigin.split(",").map(s => s.trim()).filter(Boolean) };
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ ok: true }));

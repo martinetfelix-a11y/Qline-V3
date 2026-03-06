@@ -6,6 +6,15 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "qline",
-    "platforms": ["ios", "android", "web"]
+    "platforms": ["ios", "android", "web"],
+    "plugins": ["expo-router"],
+    "ios": {
+      "infoPlist": {
+        "NSCameraUsageDescription": "QLine utilise la camera pour scanner les QR codes commerces."
+      }
+    },
+    "android": {
+      "permissions": ["CAMERA"]
+    }
   }
 }

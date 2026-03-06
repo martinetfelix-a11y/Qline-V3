@@ -1,6 +1,18 @@
 const { Router } = require("express");
 const { z } = require("zod");
-const { db } = require("../db");
+const {
+  hasCommerce,
+  getCommerceState,
+  setCommerceState,
+  listQueue,
+  enqueueTicket,
+  ticketPosition,
+  popNextTicket,
+  cancelWaitingTickets,
+  getModel,
+  setModel,
+  addEvent
+} = require("../db");
 const { requireAuth, requireMerchantForCommerce } = require("../auth");
 const { etaSeconds, updateServiceModel } = require("../aiEta");
 
@@ -13,38 +25,42 @@ function nowHHMM() {
   return `${h}:${m}`;
 }
 
-function getState(commerceId) {
-  if (!db.commerceState[commerceId]) db.commerceState[commerceId] = { open: true, paused: false };
-  return db.commerceState[commerceId];
+function getStateOr404(res, commerceId) {
+  if (!hasCommerce(commerceId)) {
+    res.status(404).json({ error: "unknown_commerce" });
+    return null;
+  }
+  return getCommerceState(commerceId);
 }
 
 queueRouter.get("/status", (req, res) => {
   const commerceId = String(req.query.commerceId || "");
-  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
-  const s = getState(commerceId);
-  res.json({ commerceId, ...s });
+  const state = getStateOr404(res, commerceId);
+  if (!state) return;
+  res.json({ commerceId, ...state });
 });
 
 queueRouter.get("/state", requireAuth, (req, res) => {
   const commerceId = String(req.query.commerceId || "");
   const ticketId = req.query.ticketId ? String(req.query.ticketId) : null;
 
-  const q = db.queues[commerceId];
-  if (!q) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
   if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
     return res.status(403).json({ error: "wrong_commerce" });
   }
 
-  const idx = ticketId ? q.findIndex(t => t.id === ticketId) : -1;
-  const ahead = idx >= 0 ? idx : q.length;
-  const eta = etaSeconds({ model: db.models[commerceId], aheadCount: ahead });
+  const queue = listQueue(commerceId);
+  const position = ticketId ? ticketPosition(commerceId, ticketId) : null;
+  const ahead = position ? position - 1 : queue.length;
+  const model = getModel(commerceId);
+  const eta = etaSeconds({ model, aheadCount: ahead });
 
   res.json({
     commerceId,
-    state: getState(commerceId),
-    queue: q,
-    my: idx >= 0 ? { ticketId, position: idx + 1 } : null,
+    state: getCommerceState(commerceId),
+    queue,
+    my: position ? { ticketId, position } : null,
     eta,
     serverTime: nowHHMM()
   });
@@ -56,25 +72,25 @@ queueRouter.post("/join", requireAuth, (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId } = parsed.data;
-  const q = db.queues[commerceId];
-  if (!q) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
-  const s = getState(commerceId);
-  if (!s.open) return res.status(409).json({ error: "queue_closed" });
-  if (s.paused) return res.status(409).json({ error: "queue_paused" });
+  const state = getCommerceState(commerceId);
+  if (!state.open) return res.status(409).json({ error: "queue_closed" });
+  if (state.paused) return res.status(409).json({ error: "queue_paused" });
 
-  // Prevent duplicate ticket in same queue (basic)
-  // NOTE: Without userId binding, this just prevents exact ID duplication.
-  const id = "A" + (10 + Math.floor(Math.random() * 90));
-  const joinedAt = new Date().toISOString();
-  q.push({ id, joinedAt });
+  const inserted = enqueueTicket(commerceId, req.user?.sub || null);
+  addEvent(commerceId, "join", { t: Date.now() });
 
-  db.events[commerceId].push({ type: "join", t: Date.now() });
+  const model = getModel(commerceId);
+  const eta = etaSeconds({ model, aheadCount: inserted.position - 1 });
 
-  const position = q.length;
-  const eta = etaSeconds({ model: db.models[commerceId], aheadCount: position - 1 });
-
-  res.json({ ticketId: id, position, eta, serverTime: nowHHMM(), state: s });
+  res.json({
+    ticketId: inserted.ticketId,
+    position: inserted.position,
+    eta,
+    serverTime: nowHHMM(),
+    state
+  });
 });
 
 queueRouter.post("/next", requireAuth, requireMerchantForCommerce, (req, res) => {
@@ -86,18 +102,23 @@ queueRouter.post("/next", requireAuth, requireMerchantForCommerce, (req, res) =>
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId, durationSec } = parsed.data;
-  const q = db.queues[commerceId];
-  if (!q) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
-  const served = q.shift() || null;
+  const served = popNextTicket(commerceId, durationSec);
 
-  // If merchant provides real duration, update model + stats
   if (served && typeof durationSec === "number") {
-    db.models[commerceId] = updateServiceModel(db.models[commerceId], durationSec);
-    db.events[commerceId].push({ type: "served", t: Date.now(), durationSec });
+    const nextModel = updateServiceModel(getModel(commerceId), durationSec);
+    setModel(commerceId, nextModel);
+    addEvent(commerceId, "served", { t: Date.now(), durationSec });
   }
 
-  res.json({ served, queue: q, model: db.models[commerceId], state: getState(commerceId), serverTime: nowHHMM() });
+  res.json({
+    served,
+    queue: listQueue(commerceId),
+    model: getModel(commerceId),
+    state: getCommerceState(commerceId),
+    serverTime: nowHHMM()
+  });
 });
 
 queueRouter.post("/close", requireAuth, requireMerchantForCommerce, (req, res) => {
@@ -106,17 +127,13 @@ queueRouter.post("/close", requireAuth, requireMerchantForCommerce, (req, res) =
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId } = parsed.data;
-  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
-  // Close = stop new joins + clear current queue
-  db.queues[commerceId] = [];
-  const s = getState(commerceId);
-  s.open = false;
-  s.paused = false;
+  cancelWaitingTickets(commerceId);
+  const state = setCommerceState(commerceId, { open: false, paused: false });
+  addEvent(commerceId, "close", { t: Date.now() });
 
-  db.events[commerceId].push({ type: "close", t: Date.now() });
-
-  res.json({ ok: true, state: s, serverTime: nowHHMM() });
+  res.json({ ok: true, state, serverTime: nowHHMM() });
 });
 
 queueRouter.post("/open", requireAuth, requireMerchantForCommerce, (req, res) => {
@@ -125,14 +142,12 @@ queueRouter.post("/open", requireAuth, requireMerchantForCommerce, (req, res) =>
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId } = parsed.data;
-  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
-  const s = getState(commerceId);
-  s.open = true;
+  const state = setCommerceState(commerceId, { open: true });
+  addEvent(commerceId, "open", { t: Date.now() });
 
-  db.events[commerceId].push({ type: "open", t: Date.now() });
-
-  res.json({ ok: true, state: s, serverTime: nowHHMM() });
+  res.json({ ok: true, state, serverTime: nowHHMM() });
 });
 
 queueRouter.post("/pause", requireAuth, requireMerchantForCommerce, (req, res) => {
@@ -141,17 +156,14 @@ queueRouter.post("/pause", requireAuth, requireMerchantForCommerce, (req, res) =
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId, paused } = parsed.data;
-  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
-  const s = getState(commerceId);
-  s.paused = paused;
+  const state = setCommerceState(commerceId, { paused });
+  addEvent(commerceId, paused ? "pause" : "resume", { t: Date.now() });
 
-  db.events[commerceId].push({ type: paused ? "pause" : "resume", t: Date.now() });
-
-  res.json({ ok: true, state: s, serverTime: nowHHMM() });
+  res.json({ ok: true, state, serverTime: nowHHMM() });
 });
 
-// Optional: allow merchant to set an initial average service time (minutes) for the AI model
 queueRouter.post("/model", requireAuth, requireMerchantForCommerce, (req, res) => {
   const schema = z.object({
     commerceId: z.string().min(1),
@@ -161,16 +173,16 @@ queueRouter.post("/model", requireAuth, requireMerchantForCommerce, (req, res) =
   if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
   const { commerceId, avgMin } = parsed.data;
-  if (!db.models[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  if (!hasCommerce(commerceId)) return res.status(404).json({ error: "unknown_commerce" });
 
   if (typeof avgMin === "number") {
+    const cur = getModel(commerceId);
     const avg = avgMin * 60;
-    const cur = db.models[commerceId];
-    db.models[commerceId] = { ...cur, avg };
-    db.events[commerceId].push({ type: "model_update", t: Date.now(), avgSec: avg });
+    setModel(commerceId, { ...cur, avg });
+    addEvent(commerceId, "model_update", { t: Date.now(), avgSec: avg });
   }
 
-  res.json({ ok: true, model: db.models[commerceId] });
+  res.json({ ok: true, model: getModel(commerceId) });
 });
 
 module.exports = { queueRouter };
