@@ -26,7 +26,17 @@ npm install
 npx expo start -c
 ```
 
-`mobile/features/config.ts` pointe sur `http://localhost:3000`.
+`mobile/features/config.ts`:
+- utilise `EXPO_PUBLIC_API_BASE` si defini
+- sinon essaie l'hote Metro (utile pour telephone sur meme Wi-Fi)
+- fallback `http://localhost:3000`
+
+Pour forcer une API precise:
+```powershell
+cd mobile
+$env:EXPO_PUBLIC_API_BASE="https://ton-api"
+npx expo start -c
+```
 
 ## Comptes seed
 - `user@qline.dev / user1234`

@@ -40,6 +40,19 @@ export default function MerchantDashboard() {
       </Reveal>
 
       <Reveal delay={250}>
+        <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/qr")}>
+          <View style={styles.iconWrap}>
+            <Ionicons name="qr-code-outline" size={20} color={ui.colors.primaryDeep} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={styles.cardText}>Mon QR code</Text>
+            <Text style={styles.cardSub}>Affiche le QR unique de ton commerce pour que les clients rejoignent ta file.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={ui.colors.textMuted} style={styles.chevron} />
+        </Pressable>
+      </Reveal>
+
+      <Reveal delay={320}>
         <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/stats")}>
           <View style={styles.iconWrap}>
             <Ionicons name="bar-chart-outline" size={20} color={ui.colors.primaryDeep} />
@@ -52,7 +65,7 @@ export default function MerchantDashboard() {
         </Pressable>
       </Reveal>
 
-      <Reveal delay={320}>
+      <Reveal delay={390}>
         <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/settings")}>
           <View style={styles.iconWrap}>
             <Ionicons name="settings-outline" size={20} color={ui.colors.primaryDeep} />
@@ -65,7 +78,7 @@ export default function MerchantDashboard() {
         </Pressable>
       </Reveal>
 
-      <Reveal delay={390}>
+      <Reveal delay={460}>
         <Pressable
           style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}
           onPress={async () => {

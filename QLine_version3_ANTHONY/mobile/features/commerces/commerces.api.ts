@@ -21,3 +21,13 @@ export async function fetchPublicCommerces() {
     throw new Error(`commerces_public_failed_${String(e)}`);
   }
 }
+
+export async function fetchPublicCommerceById(commerceId: string) {
+  try {
+    const r = await fetch(`${API_BASE}/commerces/${encodeURIComponent(commerceId)}/public`);
+    if (!r.ok) throw new Error(`commerce_public_failed_${r.status}`);
+    return r.json();
+  } catch (e) {
+    throw new Error(`commerce_public_failed_${String(e)}`);
+  }
+}

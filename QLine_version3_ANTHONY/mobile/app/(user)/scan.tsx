@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -8,6 +8,7 @@ import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
 import { StatusPill } from "../../components/StatusPill";
 import { ui } from "../../theme/ui";
+import { fetchPublicCommerceById } from "../../features/commerces/commerces.api";
 
 function extractCommerceId(data: string): string | null {
   const trimmed = data.trim();
@@ -31,6 +32,17 @@ export default function ScanScreen() {
     requestPermission();
   }, []);
 
+  const joinAfterConfirm = async (cid: string, label: string) => {
+    setMsg(`Ajout dans la file de ${label}...`);
+    try {
+      await q.join(cid);
+      router.replace("/(user)/tickets");
+    } catch {
+      setScanned(false);
+      setMsg("Echec de l'inscription. Reessaie.");
+    }
+  };
+
   const onScan = async ({ data }: { data: string }) => {
     setScanned(true);
     const cid = extractCommerceId(data);
@@ -38,9 +50,34 @@ export default function ScanScreen() {
       setMsg("QR invalide. Ex: c1 ou qline://join?commerceId=c1");
       return;
     }
-    setMsg(`Commerce detecte: ${cid}. Rejoindre...`);
-    await q.join(cid);
-    router.replace("/(user)/tickets");
+
+    let commerceLabel = cid;
+    try {
+      const details = await fetchPublicCommerceById(cid);
+      if (details?.commerce?.name) commerceLabel = details.commerce.name;
+    } catch {}
+
+    Alert.alert(
+      "Rejoindre la file ?",
+      `Voulez-vous rejoindre la file de ${commerceLabel} ?`,
+      [
+        {
+          text: "Non",
+          style: "cancel",
+          onPress: () => {
+            setScanned(false);
+            setMsg("Inscription annulee.");
+          },
+        },
+        {
+          text: "Oui",
+          onPress: () => {
+            void joinAfterConfirm(cid, commerceLabel);
+          },
+        },
+      ],
+      { cancelable: false }
+    );
   };
 
   if (!permission) {
@@ -77,7 +114,7 @@ export default function ScanScreen() {
       <Reveal delay={130}>
         <View style={styles.hero}>
           <Text style={styles.title}>Scanner un QR</Text>
-          <Text style={styles.muted}>Scanne un code qui contient commerceId (ex: c1).</Text>
+          <Text style={styles.muted}>Scanne un code commerce. Une confirmation te demandera si tu veux rejoindre la file.</Text>
         </View>
       </Reveal>
 
@@ -99,6 +136,7 @@ export default function ScanScreen() {
       </Reveal>
 
       {!!msg && <Text style={styles.msg}>{msg}</Text>}
+      {!!q.error && <Text style={styles.err}>{q.error}</Text>}
 
       {scanned && (
         <Reveal delay={240}>
@@ -180,6 +218,7 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 14, left: 14, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
   cornerBR: { bottom: 14, right: 14, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
   msg: { marginTop: 12, color: ui.colors.text, fontWeight: "700" },
+  err: { marginTop: 8, color: ui.colors.danger, fontWeight: "700" },
   btn: {
     backgroundColor: ui.colors.primary,
     borderRadius: ui.radius.pill,
