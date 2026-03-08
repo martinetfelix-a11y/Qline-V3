@@ -11,6 +11,12 @@ const db = {
   // Queue state per commerce
   queues: { c1: [], c2: [], c3: [] },
 
+  // Current called ticket (per commerce)
+  nowServing: { c1: null, c2: null, c3: null },
+
+  // Ticket history/status by ticketId
+  ticketLedger: {},
+
   // Events used for stats
   events: { c1: [], c2: [], c3: [] },
 
