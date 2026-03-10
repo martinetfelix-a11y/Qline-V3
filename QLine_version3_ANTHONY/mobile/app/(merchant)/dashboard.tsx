@@ -65,7 +65,20 @@ export default function MerchantDashboard() {
         </Pressable>
       </Reveal>
 
-      <Reveal delay={390}>
+      <Reveal delay={360}>
+        <Pressable style={({ pressed }) => [styles.card, pressed && styles.cardPressed]} onPress={() => router.push("/(merchant)/qr")}>
+          <View style={styles.iconWrap}>
+            <Ionicons name="qr-code-outline" size={20} color={ui.colors.primaryDeep} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={styles.cardText}>QR client</Text>
+            <Text style={styles.cardSub}>Afficher un QR que les clients peuvent scanner pour rejoindre la file.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={ui.colors.textMuted} style={styles.chevron} />
+        </Pressable>
+      </Reveal>
+
+      <Reveal delay={430}>
         <Pressable
           style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]}
           onPress={async () => {

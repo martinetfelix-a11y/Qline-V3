@@ -1,104 +1,191 @@
 const { Router } = require("express");
-const { db } = require("../db");
+const { query } = require("../db");
 const { requireAuth } = require("../auth");
 
 const statsRouter = Router();
 
-function startOfDayMs(dayStr) {
-  const d = new Date(dayStr + "T00:00:00");
-  return d.getTime();
+function startOfDayIso(dayStr) {
+  return new Date(`${dayStr}T00:00:00.000Z`).toISOString();
 }
-function endOfDayMs(dayStr) {
-  const d = new Date(dayStr + "T23:59:59");
-  return d.getTime();
+
+function endOfDayIso(dayStr) {
+  return new Date(`${dayStr}T23:59:59.999Z`).toISOString();
 }
+
 function fmtMin(sec) {
   return Math.round(sec / 60);
 }
 
-statsRouter.get("/kpis", requireAuth, (req, res) => {
-  const commerceId = String(req.query.commerceId || "");
-  const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
-
+async function assertCommerceAccess(req, commerceId) {
+  const commerce = await query("SELECT id FROM commerces WHERE id = $1", [commerceId]);
+  if (commerce.rowCount === 0) return { status: 404, body: { error: "unknown_commerce" } };
   if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
-    return res.status(403).json({ error: "wrong_commerce" });
+    return { status: 403, body: { error: "wrong_commerce" } };
   }
+  return null;
+}
 
-  const from = startOfDayMs(day);
-  const to = endOfDayMs(day);
-  const events = db.events[commerceId].filter(e => e.t >= from && e.t <= to);
-  const served = events.filter(e => e.type === "served");
-  const joins = events.filter(e => e.type === "join");
+statsRouter.get("/kpis", requireAuth, async (req, res, next) => {
+  try {
+    const commerceId = String(req.query.commerceId || "");
+    const day = String(req.query.day || new Date().toISOString().slice(0, 10));
+    const denied = await assertCommerceAccess(req, commerceId);
+    if (denied) return res.status(denied.status).json(denied.body);
 
-  const waitingNow = (db.queues[commerceId] || []).length;
-  const servedToday = served.length;
-  const joinedToday = joins.length;
+    const from = startOfDayIso(day);
+    const to = endOfDayIso(day);
 
-  const durations = served.map(s => s.durationSec).filter(n => typeof n === "number");
-  const avgService = durations.length ? durations.reduce((a,b)=>a+b,0)/durations.length : null;
+    const joinedResult = await query(
+      `
+        SELECT COUNT(*)::INT AS count
+        FROM events
+        WHERE commerce_id = $1 AND type = 'join' AND t >= $2 AND t <= $3
+      `,
+      [commerceId, from, to]
+    );
+    const cancelledResult = await query(
+      `
+        SELECT COUNT(*)::INT AS count
+        FROM events
+        WHERE commerce_id = $1 AND type = 'cancel' AND t >= $2 AND t <= $3
+      `,
+      [commerceId, from, to]
+    );
+    const waitingResult = await query(
+      `
+        SELECT COUNT(*)::INT AS count
+        FROM tickets
+        WHERE commerce_id = $1 AND status = 'active'
+      `,
+      [commerceId]
+    );
+    const serviceResult = await query(
+      `
+        SELECT
+          COUNT(*)::INT AS served_today,
+          AVG(duration_sec)::FLOAT AS avg_service_sec,
+          PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY duration_sec)::FLOAT AS p90_service_sec
+        FROM tickets
+        WHERE commerce_id = $1
+          AND status = 'served'
+          AND served_at >= $2
+          AND served_at <= $3
+      `,
+      [commerceId, from, to]
+    );
+    const waitResult = await query(
+      `
+        SELECT AVG(EXTRACT(EPOCH FROM (called_at - joined_at)))::FLOAT AS avg_wait_sec
+        FROM tickets
+        WHERE commerce_id = $1
+          AND status = 'served'
+          AND served_at >= $2
+          AND served_at <= $3
+          AND called_at IS NOT NULL
+      `,
+      [commerceId, from, to]
+    );
 
-  const sorted = durations.slice().sort((a,b)=>a-b);
-  const p90 = sorted.length ? sorted[Math.floor(0.9*(sorted.length-1))] : null;
+    const joinedToday = joinedResult.rows[0]?.count ?? 0;
+    const cancelledToday = cancelledResult.rows[0]?.count ?? 0;
+    const waitingNow = waitingResult.rows[0]?.count ?? 0;
+    const servedToday = serviceResult.rows[0]?.served_today ?? 0;
+    const avgServiceSec = serviceResult.rows[0]?.avg_service_sec;
+    const p90ServiceSec = serviceResult.rows[0]?.p90_service_sec;
+    const avgWaitSec = waitResult.rows[0]?.avg_wait_sec;
 
-  res.json({
-    commerceId,
-    day,
-    waitingNow,
-    joinedToday,
-    servedToday,
-    avgServiceMin: avgService ? fmtMin(avgService) : null,
-    p90ServiceMin: p90 ? fmtMin(p90) : null
-  });
+    res.json({
+      commerceId,
+      day,
+      avgWaitMin: avgWaitSec ? fmtMin(avgWaitSec) : null,
+      waitingNow,
+      joinedToday,
+      servedToday,
+      cancelledToday,
+      avgServiceMin: avgServiceSec ? fmtMin(avgServiceSec) : null,
+      p90ServiceMin: p90ServiceSec ? fmtMin(p90ServiceSec) : null,
+      abandonmentRatePct: joinedToday > 0 ? Math.round((cancelledToday / joinedToday) * 100) : 0,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-statsRouter.get("/timeseries", requireAuth, (req, res) => {
-  const commerceId = String(req.query.commerceId || "");
-  const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+statsRouter.get("/timeseries", requireAuth, async (req, res, next) => {
+  try {
+    const commerceId = String(req.query.commerceId || "");
+    const day = String(req.query.day || new Date().toISOString().slice(0, 10));
+    const denied = await assertCommerceAccess(req, commerceId);
+    if (denied) return res.status(denied.status).json(denied.body);
 
-  if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
-    return res.status(403).json({ error: "wrong_commerce" });
+    const from = startOfDayIso(day);
+    const to = endOfDayIso(day);
+    const result = await query(
+      `
+        SELECT
+          EXTRACT(HOUR FROM t)::INT AS hour,
+          COUNT(*) FILTER (WHERE type = 'join')::INT AS join,
+          COUNT(*) FILTER (WHERE type = 'served')::INT AS served
+        FROM events
+        WHERE commerce_id = $1
+          AND t >= $2
+          AND t <= $3
+        GROUP BY EXTRACT(HOUR FROM t)
+        ORDER BY hour ASC
+      `,
+      [commerceId, from, to]
+    );
+
+    const series = Array.from({ length: 24 }, (_, hour) => ({ hour, join: 0, served: 0 }));
+    for (const row of result.rows) {
+      series[row.hour] = { hour: row.hour, join: row.join, served: row.served };
+    }
+
+    res.json({ commerceId, day, series });
+  } catch (error) {
+    next(error);
   }
-
-  const from = startOfDayMs(day);
-  const to = endOfDayMs(day);
-
-  const bins = Array.from({ length: 24 }, (_, h) => ({ hour: h, join: 0, served: 0 }));
-  const events = db.events[commerceId].filter(e => e.t >= from && e.t <= to);
-
-  for (const e of events) {
-    const h = new Date(e.t).getHours();
-    if (e.type === "join") bins[h].join += 1;
-    if (e.type === "served") bins[h].served += 1;
-  }
-
-  res.json({ commerceId, day, series: bins });
 });
 
-statsRouter.get("/distribution", requireAuth, (req, res) => {
-  const commerceId = String(req.query.commerceId || "");
-  const day = String(req.query.day || new Date().toISOString().slice(0, 10));
-  if (!db.events[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+statsRouter.get("/distribution", requireAuth, async (req, res, next) => {
+  try {
+    const commerceId = String(req.query.commerceId || "");
+    const day = String(req.query.day || new Date().toISOString().slice(0, 10));
+    const denied = await assertCommerceAccess(req, commerceId);
+    if (denied) return res.status(denied.status).json(denied.body);
 
-  if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
-    return res.status(403).json({ error: "wrong_commerce" });
+    const from = startOfDayIso(day);
+    const to = endOfDayIso(day);
+    const result = await query(
+      `
+        SELECT duration_sec
+        FROM tickets
+        WHERE commerce_id = $1
+          AND status = 'served'
+          AND served_at >= $2
+          AND served_at <= $3
+          AND duration_sec IS NOT NULL
+      `,
+      [commerceId, from, to]
+    );
+
+    const bins = [];
+    for (let start = 0; start <= 60; start += 5) bins.push({ minFrom: start, minTo: start + 4, count: 0 });
+    for (const row of result.rows) {
+      const minute = Math.min(60, Math.floor(row.duration_sec / 60));
+      const idx = Math.min(bins.length - 1, Math.floor(minute / 5));
+      bins[idx].count += 1;
+    }
+
+    res.json({
+      commerceId,
+      day,
+      histogram: bins,
+      samples: result.rows.slice(0, 200).map((row) => row.duration_sec),
+    });
+  } catch (error) {
+    next(error);
   }
-
-  const from = startOfDayMs(day);
-  const to = endOfDayMs(day);
-  const served = db.events[commerceId].filter(e => e.type === "served" && e.t >= from && e.t <= to);
-
-  const durations = served.map(s => s.durationSec).filter(n => typeof n === "number");
-  const bins = [];
-  for (let start = 0; start <= 60; start += 5) bins.push({ minFrom: start, minTo: start + 4, count: 0 });
-  for (const dsec of durations) {
-    const m = Math.min(60, Math.floor(dsec / 60));
-    const idx = Math.min(bins.length - 1, Math.floor(m / 5));
-    bins[idx].count += 1;
-  }
-
-  res.json({ commerceId, day, histogram: bins, samples: durations.slice(0, 200) });
 });
 
 module.exports = { statsRouter };

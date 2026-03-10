@@ -6,6 +6,7 @@ import { useAuth } from "../../features/auth/AuthProvider";
 import { getQueueState, merchantOpen, merchantClose, merchantPause, merchantSetAvg } from "../../features/queue/queue.api";
 import { Card } from "../../components/Card";
 import { AppHeader } from "../../components/AppHeader";
+import { CommerceQrCard } from "../../components/CommerceQrCard";
 import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
 import { ShimmerLine } from "../../components/ShimmerLine";
@@ -152,6 +153,10 @@ export default function MerchantSettings() {
       </Reveal>
 
       <Reveal delay={290}>
+        <CommerceQrCard commerceId={commerceId} />
+      </Reveal>
+
+      <Reveal delay={330}>
         <Card>
           <Text style={styles.h}>Danger zone</Text>
           <Text style={styles.muted}>Fermer la file supprime les rendez-vous en attente.</Text>
@@ -166,7 +171,7 @@ export default function MerchantSettings() {
 
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
-      <Reveal delay={360}>
+      <Reveal delay={400}>
         <Pressable style={({ pressed }) => [styles.logout, pressed && styles.logoutPressed]} onPress={doLogout}>
           <View style={styles.btnRow}>
             <Ionicons name="log-out-outline" size={18} color="white" />

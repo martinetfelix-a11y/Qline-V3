@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { BarCodeScanner } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useCommerces } from "../../features/commerces/commerces.store";
 import { useUserQueue } from "../../features/queue/userQueue.store";
 import { Reveal } from "../../components/Reveal";
 import { ScreenShell } from "../../components/ScreenShell";
@@ -23,30 +24,40 @@ function extractCommerceId(data: string): string | null {
 
 export default function ScanScreen() {
   const q = useUserQueue();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const { commerces } = useCommerces();
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [pendingCommerceId, setPendingCommerceId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === "granted");
+      await requestPermission();
     })();
-  }, []);
+  }, [requestPermission]);
 
   const onScan = async ({ data }: { data: string }) => {
     setScanned(true);
     const cid = extractCommerceId(data);
     if (!cid) {
+      setPendingCommerceId(null);
       setMsg("QR invalide. Ex: c1 ou qline://join?commerceId=c1");
       return;
     }
-    setMsg(`Commerce detecte: ${cid}. Rejoindre...`);
-    await q.join(cid);
+    setPendingCommerceId(cid);
+    setMsg("");
+  };
+
+  const pendingCommerceName = commerces.find((c) => c.id === pendingCommerceId)?.name || pendingCommerceId;
+
+  const confirmJoin = async () => {
+    if (!pendingCommerceId) return;
+    setMsg(`Rejoindre ${pendingCommerceName}...`);
+    await q.join(pendingCommerceId);
     router.replace("/(user)/tickets");
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Demande permission camera...</Text>
@@ -54,10 +65,16 @@ export default function ScanScreen() {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <ScreenShell scroll={false} contentContainerStyle={styles.centerContent}>
         <Text style={styles.stateText}>Acces camera refuse.</Text>
+        <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={requestPermission}>
+          <View style={styles.rowBtn}>
+            <Ionicons name="camera-outline" size={18} color="white" />
+            <Text style={styles.btnText}>Autoriser la camera</Text>
+          </View>
+        </Pressable>
         <Pressable style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]} onPress={() => router.back()}>
           <View style={styles.rowBtn}>
             <Ionicons name="arrow-back-outline" size={18} color={ui.colors.primaryDeep} />
@@ -87,7 +104,11 @@ export default function ScanScreen() {
       <Reveal delay={190}>
         <View style={styles.scannerShell}>
           <View style={styles.scanner}>
-            <BarCodeScanner onBarCodeScanned={scanned ? undefined : onScan} style={{ flex: 1 }} />
+            <CameraView
+              onBarcodeScanned={scanned ? undefined : onScan}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              style={{ flex: 1 }}
+            />
             <View pointerEvents="none" style={[styles.corner, styles.cornerTL]} />
             <View pointerEvents="none" style={[styles.corner, styles.cornerTR]} />
             <View pointerEvents="none" style={[styles.corner, styles.cornerBL]} />
@@ -96,9 +117,42 @@ export default function ScanScreen() {
         </View>
       </Reveal>
 
+      {!!pendingCommerceId && (
+        <Reveal delay={220}>
+          <View style={styles.confirmBox}>
+            <Text style={styles.confirmTitle}>Rejoindre cette file ?</Text>
+            <Text style={styles.confirmBody}>{pendingCommerceName}</Text>
+            <Text style={styles.confirmHint}>Confirme pour entrer dans la file du commerce scanne.</Text>
+
+            <View style={styles.confirmActions}>
+              <Pressable style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]} onPress={confirmJoin}>
+                <View style={styles.rowBtn}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="white" />
+                  <Text style={styles.btnText}>Oui, rejoindre</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.btnAlt, pressed && styles.btnAltPressed]}
+                onPress={() => {
+                  setPendingCommerceId(null);
+                  setScanned(false);
+                  setMsg("");
+                }}
+              >
+                <View style={styles.rowBtn}>
+                  <Ionicons name="close-circle-outline" size={18} color={ui.colors.primaryDeep} />
+                  <Text style={styles.btnAltText}>Annuler</Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </Reveal>
+      )}
+
       {!!msg && <Text style={styles.msg}>{msg}</Text>}
 
-      {scanned && (
+      {scanned && !pendingCommerceId && (
         <Reveal delay={240}>
           <Pressable
             style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
@@ -178,6 +232,19 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 14, left: 14, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
   cornerBR: { bottom: 14, right: 14, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
   msg: { marginTop: 12, color: ui.colors.text, fontWeight: "700" },
+  confirmBox: {
+    marginTop: 14,
+    backgroundColor: ui.colors.surface,
+    borderRadius: ui.radius.lg,
+    padding: ui.spacing.md,
+    borderWidth: 1,
+    borderColor: ui.colors.borderStrong,
+    ...ui.shadow.soft,
+  },
+  confirmTitle: { color: ui.colors.text, fontWeight: "900", fontSize: 18, marginBottom: 6 },
+  confirmBody: { color: ui.colors.primaryDeep, fontWeight: "900", fontSize: 16 },
+  confirmHint: { marginTop: 6, color: ui.colors.textMuted, fontWeight: "600", lineHeight: 18 },
+  confirmActions: { marginTop: 12, gap: 10 },
   btn: {
     backgroundColor: ui.colors.primary,
     borderRadius: ui.radius.pill,

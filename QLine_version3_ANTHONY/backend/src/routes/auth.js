@@ -1,86 +1,92 @@
 const { Router } = require("express");
 const bcrypt = require("bcryptjs");
 const { z } = require("zod");
-const { db } = require("../db");
+const { query } = require("../db");
 const { signToken } = require("../auth");
 
 const authRouter = Router();
 
-function hasCommerce(id) {
-  return db.commerces.some(c => c.id === id);
+function nextUserId() {
+  return `u_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Seed accounts for quick test
-(function seed() {
-  const ensure = (email, password, role, commerceId) => {
-    if (db.users.some(u => u.email === email)) return;
-    const passHash = bcrypt.hashSync(password, 10);
-    db.users.push({
-      id: "u" + (db.users.length + 1),
-      email,
-      passHash,
-      role,
-      ...(commerceId ? { commerceId } : {})
+authRouter.post("/signup", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(6),
+      role: z.enum(["user", "merchant"]),
+      commerceId: z.string().optional(),
     });
-  };
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "bad_request", details: parsed.error.flatten() });
 
-  // Merchants (each locked to its commerce)
-  ensure("c1@qline.dev", "merchant123", "merchant", "c1");
-  ensure("c2@qline.dev", "merchant123", "merchant", "c2");
-  ensure("c3@qline.dev", "merchant123", "merchant", "c3");
+    const { email, password, role, commerceId } = parsed.data;
+    const existingUser = await query("SELECT id FROM users WHERE email = $1", [email]);
+    if (existingUser.rowCount > 0) return res.status(409).json({ error: "email_taken" });
 
-  // User
-  ensure("user@qline.dev", "user1234", "user");
-})();
+    if (role === "merchant") {
+      const commerce = await query("SELECT id FROM commerces WHERE id = $1", [commerceId]);
+      if (!commerceId || commerce.rowCount === 0) return res.status(400).json({ error: "invalid_commerceId" });
+    }
 
-authRouter.post("/signup", (req, res) => {
-  const schema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6),
-    role: z.enum(["user", "merchant"]),
-    commerceId: z.string().optional()
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "bad_request", details: parsed.error.flatten() });
+    const id = nextUserId();
+    const passHash = bcrypt.hashSync(password, 10);
+    await query(
+      `
+        INSERT INTO users (id, email, pass_hash, role, commerce_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [id, email, passHash, role, role === "merchant" ? commerceId : null]
+    );
 
-  const { email, password, role, commerceId } = parsed.data;
-  if (db.users.some(u => u.email === email)) return res.status(409).json({ error: "email_taken" });
-
-  if (role === "merchant") {
-    if (!commerceId || !hasCommerce(commerceId)) return res.status(400).json({ error: "invalid_commerceId" });
+    const token = signToken({ sub: id, email, role, ...(role === "merchant" ? { commerceId } : {}) });
+    return res.json({ token, role, email, commerceId: role === "merchant" ? commerceId : null });
+  } catch (error) {
+    return next(error);
   }
-
-  const id = "u" + (db.users.length + 1);
-  const passHash = bcrypt.hashSync(password, 10);
-  db.users.push({ id, email, passHash, role, ...(role === "merchant" ? { commerceId } : {}) });
-
-  const token = signToken({ sub: id, email, role, ...(role === "merchant" ? { commerceId } : {}) });
-  res.json({ token, role, email, commerceId: role === "merchant" ? commerceId : null });
 });
 
-authRouter.post("/login", (req, res) => {
-  const schema = z.object({
-    email: z.string().email(),
-    password: z.string().min(1)
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+authRouter.post("/login", async (req, res, next) => {
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-  const { email, password } = parsed.data;
-  const user = db.users.find(u => u.email === email);
-  if (!user) return res.status(401).json({ error: "invalid_credentials" });
+    const { email, password } = parsed.data;
+    const result = await query(
+      `
+        SELECT id, email, pass_hash, role, commerce_id
+        FROM users
+        WHERE email = $1
+      `,
+      [email]
+    );
+    if (result.rowCount === 0) return res.status(401).json({ error: "invalid_credentials" });
 
-  const ok = bcrypt.compareSync(password, user.passHash);
-  if (!ok) return res.status(401).json({ error: "invalid_credentials" });
+    const user = result.rows[0];
+    const ok = bcrypt.compareSync(password, user.pass_hash);
+    if (!ok) return res.status(401).json({ error: "invalid_credentials" });
 
-  const token = signToken({
-    sub: user.id,
-    email: user.email,
-    role: user.role,
-    ...(user.role === "merchant" ? { commerceId: user.commerceId } : {})
-  });
+    const token = signToken({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      ...(user.role === "merchant" ? { commerceId: user.commerce_id } : {}),
+    });
 
-  res.json({ token, role: user.role, email: user.email, commerceId: user.role === "merchant" ? user.commerceId : null });
+    return res.json({
+      token,
+      role: user.role,
+      email: user.email,
+      commerceId: user.role === "merchant" ? user.commerce_id : null,
+    });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 module.exports = { authRouter };
