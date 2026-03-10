@@ -1,6 +1,8 @@
 # Ignore the node_modules directory
 node_modules/
 .env/
+.env
+backend/.env
 .expo/
 mobile/dist/
 backend/data/
