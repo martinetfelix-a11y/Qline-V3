@@ -20,6 +20,14 @@ app.use(async (req, res, next) => {
   }
 });
 
+app.get("/", (req, res) =>
+  res.json({
+    ok: true,
+    service: "qline-api",
+    endpoints: ["/health", "/auth/login", "/auth/signup", "/commerces/public"],
+  })
+);
+
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/auth", authRouter);
