@@ -25,48 +25,48 @@ function metricBars(kpis: any): MetricBar[] {
   return [
     {
       key: "avgWaitMin",
-      label: "Average Wait Time",
-      shortLabel: "Wait",
+      label: "Temps d'attente moyen",
+      shortLabel: "Attente",
       value: Number(kpis?.avgWaitMin ?? 0),
       display: `${kpis?.avgWaitMin ?? 0} min`,
       accent: "#5a93d7",
-      note: "Total customer wait time / customers served",
+      note: "Temps total d'attente des clients / nombre de clients servis",
     },
     {
       key: "servedToday",
-      label: "Customers Served Today",
-      shortLabel: "Served",
+      label: "Clients servis aujourd'hui",
+      shortLabel: "Servis",
       value: Number(kpis?.servedToday ?? 0),
       display: String(kpis?.servedToday ?? 0),
       accent: "#d93c57",
-      note: "Completed tickets today",
+      note: "Nombre de tickets termines aujourd'hui",
     },
     {
       key: "waitingNow",
-      label: "Customers Waiting",
-      shortLabel: "Waiting",
+      label: "Clients en attente",
+      shortLabel: "En file",
       value: Number(kpis?.waitingNow ?? 0),
       display: String(kpis?.waitingNow ?? 0),
       accent: "#3c8d2f",
-      note: "Current queue length",
+      note: "Nombre actuel de personnes dans la file",
     },
     {
       key: "avgServiceMin",
-      label: "Average Service Time",
+      label: "Temps de service moyen",
       shortLabel: "Service",
       value: Number(kpis?.avgServiceMin ?? 0),
       display: `${kpis?.avgServiceMin ?? 0} min`,
       accent: "#f26f2d",
-      note: "Total service time / customers served",
+      note: "Temps total de service / nombre de clients servis",
     },
     {
       key: "abandonmentRatePct",
-      label: "Abandonment Rate",
-      shortLabel: "Drop-off",
+      label: "Taux d'abandon",
+      shortLabel: "Abandon",
       value: Number(kpis?.abandonmentRatePct ?? 0),
       display: `${kpis?.abandonmentRatePct ?? 0}%`,
       accent: "#d8c919",
-      note: "Cancelled tickets / created tickets",
+      note: "Tickets annules / tickets crees",
     },
   ];
 }
@@ -101,8 +101,8 @@ export default function MerchantStats() {
 
       <Reveal delay={180}>
         <Card>
-          <Text style={styles.h}>Queue performance overview</Text>
-          <Text style={styles.sub}>The chart compares the five core queue metrics you requested for this commerce.</Text>
+          <Text style={styles.h}>Vue d'ensemble des performances de la file</Text>
+          <Text style={styles.sub}>Le graphique compare les cinq indicateurs principaux de cette file pour ce commerce.</Text>
 
           {loading ? (
             <View style={styles.loadingBlock}>
@@ -139,7 +139,7 @@ export default function MerchantStats() {
 
       <Reveal delay={250}>
         <Card>
-          <Text style={styles.h}>Metric details</Text>
+          <Text style={styles.h}>Details des indicateurs</Text>
           {loading ? (
             <View style={styles.loadingBlock}>
               <ShimmerLine width="84%" />

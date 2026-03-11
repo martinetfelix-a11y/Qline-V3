@@ -1,6 +1,6 @@
 const { Router } = require("express");
 const { z } = require("zod");
-const { withTransaction, query } = require("../db");
+const { db } = require("../db");
 const { requireAuth, requireMerchantForCommerce } = require("../auth");
 const { etaSeconds, updateServiceModel } = require("../aiEta");
 
@@ -23,622 +23,417 @@ function waitSecondsSince(iso) {
   return Math.max(0, Math.floor((Date.now() - t) / 1000));
 }
 
-function mapModel(row) {
-  return { avg: row.model_avg_sec, var: row.model_var_sec };
+function getState(commerceId) {
+  if (!db.commerceState[commerceId]) db.commerceState[commerceId] = { open: true, paused: false };
+  return db.commerceState[commerceId];
 }
 
-function mapQueueTicket(ticket, role) {
-  const base = {
-    id: ticket.id,
-    joinedAt: ticket.joined_at,
-    waitSec: waitSecondsSince(ticket.joined_at),
+function getNowServing(commerceId) {
+  if (!Object.prototype.hasOwnProperty.call(db.nowServing, commerceId)) db.nowServing[commerceId] = null;
+  return db.nowServing[commerceId];
+}
+
+function setNowServing(commerceId, value) {
+  db.nowServing[commerceId] = value;
+}
+
+function upsertLedger(ticket, commerceId, status, extra = {}) {
+  if (!ticket?.id) return;
+  const prev = db.ticketLedger[ticket.id] || {};
+  db.ticketLedger[ticket.id] = {
+    ticketId: ticket.id,
+    commerceId,
+    userId: ticket.userId || prev.userId || null,
+    userEmail: ticket.userEmail || prev.userEmail || null,
+    joinedAt: ticket.joinedAt || prev.joinedAt || null,
+    status,
+    updatedAt: nowISO(),
+    ...extra,
   };
-  if (role === "merchant") return { ...base, userEmail: ticket.user_email || null };
-  return base;
 }
 
-function mapCalledTicket(ticket, role) {
-  if (!ticket) return null;
+function ticketIdExists(id) {
+  if (db.ticketLedger[id]) return true;
+  if (Object.values(db.nowServing).some((t) => t && t.id === id)) return true;
+  return Object.values(db.queues).some((q) => q.some((t) => t.id === id));
+}
+
+function generateTicketId() {
+  let id = "";
+  do {
+    id = "R" + Math.floor(100000 + Math.random() * 900000);
+  } while (ticketIdExists(id));
+  return id;
+}
+
+function findUserActive(userId) {
+  for (const [commerceId, q] of Object.entries(db.queues)) {
+    const idx = q.findIndex((t) => t.userId === userId);
+    if (idx >= 0) return { commerceId, ticket: q[idx], position: idx + 1, inQueue: true };
+  }
+  for (const [commerceId, t] of Object.entries(db.nowServing)) {
+    if (t && t.userId === userId) return { commerceId, ticket: t, position: null, inQueue: false };
+  }
+  return null;
+}
+
+function queueView(q, role) {
   if (role === "merchant") {
-    return {
-      id: ticket.id,
-      calledAt: ticket.called_at,
-      joinedAt: ticket.joined_at,
-      userEmail: ticket.user_email || null,
-      waitSec: ticket.called_at ? waitSecondsSince(ticket.called_at) : 0,
+    return q.map((t) => ({
+      id: t.id,
+      joinedAt: t.joinedAt,
+      userEmail: t.userEmail || null,
+      waitSec: waitSecondsSince(t.joinedAt),
+    }));
+  }
+  return q.map((t) => ({
+    id: t.id,
+    joinedAt: t.joinedAt,
+    waitSec: waitSecondsSince(t.joinedAt),
+  }));
+}
+
+queueRouter.get("/status", (req, res) => {
+  const commerceId = String(req.query.commerceId || "");
+  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+  const s = getState(commerceId);
+  const ns = getNowServing(commerceId);
+  res.json({
+    commerceId,
+    ...s,
+    nowServing: ns ? { id: ns.id, calledAt: ns.calledAt || null } : null,
+  });
+});
+
+queueRouter.get("/state", requireAuth, (req, res) => {
+  const commerceId = String(req.query.commerceId || "");
+  const ticketIdQuery = req.query.ticketId ? String(req.query.ticketId) : null;
+
+  const q = db.queues[commerceId];
+  if (!q) return res.status(404).json({ error: "unknown_commerce" });
+
+  if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
+    return res.status(403).json({ error: "wrong_commerce" });
+  }
+
+  const state = getState(commerceId);
+  const nowServing = getNowServing(commerceId);
+  const now = nowISO();
+
+  let idx = -1;
+  let activeTicket = null;
+
+  if (ticketIdQuery) {
+    idx = q.findIndex((t) => t.id === ticketIdQuery);
+    if (idx >= 0) activeTicket = q[idx];
+  }
+
+  if (!activeTicket && req.user.role === "user") {
+    idx = q.findIndex((t) => t.userId === req.user.sub);
+    if (idx >= 0) activeTicket = q[idx];
+  }
+
+  let my = null;
+  if (activeTicket && idx >= 0) {
+    const myEta = etaSeconds({ model: db.models[commerceId], aheadCount: idx });
+    my = {
+      ticketId: activeTicket.id,
+      status: "active",
+      position: idx + 1,
+      joinedAt: activeTicket.joinedAt,
+      updatedAt: now,
+      eta: myEta,
     };
+  } else {
+    const lookupId =
+      ticketIdQuery ||
+      (req.user.role === "user" && nowServing && nowServing.userId === req.user.sub ? nowServing.id : null);
+    const ledger = lookupId ? db.ticketLedger[lookupId] : null;
+    if (ledger && ledger.commerceId === commerceId) {
+      my = {
+        ticketId: ledger.ticketId,
+        status: ledger.status || "unknown",
+        position: null,
+        joinedAt: ledger.joinedAt || null,
+        updatedAt: ledger.updatedAt || null,
+        calledAt: ledger.calledAt || null,
+        servedAt: ledger.servedAt || null,
+        cancelledAt: ledger.cancelledAt || null,
+        eta: null,
+      };
+    }
   }
-  return {
-    id: ticket.id,
-    calledAt: ticket.called_at,
-    joinedAt: ticket.joined_at,
-  };
-}
 
-function nextTicketId() {
-  return `R${Math.floor(100000 + Math.random() * 900000)}`;
-}
-
-async function insertEvent(client, event) {
-  await client.query(
-    `
-      INSERT INTO events (commerce_id, type, t, ticket_id, user_id, duration_sec, reason, avg_sec)
-      VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7)
-    `,
-    [
-      event.commerceId,
-      event.type,
-      event.ticketId || null,
-      event.userId || null,
-      event.durationSec ?? null,
-      event.reason || null,
-      event.avgSec ?? null,
-    ]
-  );
-}
-
-async function getCommerce(client, commerceId) {
-  const result = await client.query(
-    `
-      SELECT id, name, open, paused, model_avg_sec, model_var_sec
-      FROM commerces
-      WHERE id = $1
-    `,
-    [commerceId]
-  );
-  return result.rows[0] || null;
-}
-
-async function getQueue(client, commerceId) {
-  const result = await client.query(
-    `
-      SELECT id, joined_at, user_id, user_email
-      FROM tickets
-      WHERE commerce_id = $1 AND status = 'active'
-      ORDER BY joined_at ASC
-    `,
-    [commerceId]
-  );
-  return result.rows;
-}
-
-async function getCurrentCalled(client, commerceId, forUpdate = false) {
-  const result = await client.query(
-    `
-      SELECT id, joined_at, called_at, user_id, user_email, status
-      FROM tickets
-      WHERE commerce_id = $1 AND status = 'called'
-      ORDER BY called_at ASC
-      LIMIT 1
-      ${forUpdate ? "FOR UPDATE" : ""}
-    `,
-    [commerceId]
-  );
-  return result.rows[0] || null;
-}
-
-async function getUserActiveTicket(client, userId) {
-  const result = await client.query(
-    `
-      SELECT id, commerce_id, joined_at, called_at, status
-      FROM tickets
-      WHERE user_id = $1 AND status IN ('active', 'called')
-      ORDER BY CASE WHEN status = 'called' THEN 0 ELSE 1 END, updated_at DESC
-      LIMIT 1
-    `,
-    [userId]
-  );
-  return result.rows[0] || null;
-}
-
-async function getTicketById(client, ticketId) {
-  const result = await client.query(
-    `
-      SELECT id, commerce_id, joined_at, called_at, served_at, cancelled_at, updated_at, status
-      FROM tickets
-      WHERE id = $1
-    `,
-    [ticketId]
-  );
-  return result.rows[0] || null;
-}
-
-async function generateUniqueTicketId(client) {
-  for (;;) {
-    const id = nextTicketId();
-    const found = await client.query("SELECT 1 FROM tickets WHERE id = $1", [id]);
-    if (found.rowCount === 0) return id;
-  }
-}
-
-queueRouter.get("/status", async (req, res, next) => {
-  try {
-    const commerceId = String(req.query.commerceId || "");
-    const commerce = await withTransaction((client) => getCommerce(client, commerceId));
-    if (!commerce) return res.status(404).json({ error: "unknown_commerce" });
-
-    const nowServing = await withTransaction((client) => getCurrentCalled(client, commerceId));
-    return res.json({
-      commerceId,
-      open: commerce.open,
-      paused: commerce.paused,
-      nowServing: nowServing ? { id: nowServing.id, calledAt: nowServing.called_at || null } : null,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-queueRouter.get("/state", requireAuth, async (req, res, next) => {
-  try {
-    const commerceId = String(req.query.commerceId || "");
-    const ticketIdQuery = req.query.ticketId ? String(req.query.ticketId) : null;
-
-    const payload = await withTransaction(async (client) => {
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
-
-      if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
-        return { error: { status: 403, body: { error: "wrong_commerce" } } };
-      }
-
-      const queue = await getQueue(client, commerceId);
-      const nowServing = await getCurrentCalled(client, commerceId);
-      const model = mapModel(commerce);
-
-      let my = null;
-      let activeIdx = -1;
-      let activeTicket = null;
-
-      if (ticketIdQuery) {
-        activeIdx = queue.findIndex((ticket) => ticket.id === ticketIdQuery);
-        if (activeIdx >= 0) activeTicket = queue[activeIdx];
-      }
-
-      if (!activeTicket && req.user.role === "user") {
-        activeIdx = queue.findIndex((ticket) => ticket.user_id === req.user.sub);
-        if (activeIdx >= 0) activeTicket = queue[activeIdx];
-      }
-
-      if (activeTicket && activeIdx >= 0) {
-        my = {
-          ticketId: activeTicket.id,
-          status: "active",
-          position: activeIdx + 1,
-          joinedAt: activeTicket.joined_at,
-          updatedAt: nowISO(),
-          eta: etaSeconds({ model, aheadCount: activeIdx }),
-        };
-      } else {
-        const lookupId =
-          ticketIdQuery ||
-          (req.user.role === "user" && nowServing && nowServing.user_id === req.user.sub ? nowServing.id : null);
-
-        if (lookupId) {
-          const ticket = await getTicketById(client, lookupId);
-          if (ticket && ticket.commerce_id === commerceId) {
-            my = {
-              ticketId: ticket.id,
-              status: ticket.status || "unknown",
-              position: null,
-              joinedAt: ticket.joined_at || null,
-              updatedAt: ticket.updated_at || null,
-              calledAt: ticket.called_at || null,
-              servedAt: ticket.served_at || null,
-              cancelledAt: ticket.cancelled_at || null,
-              eta: null,
-            };
+  const queueEta = etaSeconds({ model: db.models[commerceId], aheadCount: q.length });
+  const visibleNowServing =
+    nowServing == null
+      ? null
+      : req.user.role === "merchant"
+        ? {
+            id: nowServing.id,
+            calledAt: nowServing.calledAt || null,
+            joinedAt: nowServing.joinedAt || null,
+            userEmail: nowServing.userEmail || null,
+            waitSec: nowServing.calledAt ? waitSecondsSince(nowServing.calledAt) : 0,
           }
-        }
-      }
-
-      return {
-        commerceId,
-        state: { open: commerce.open, paused: commerce.paused },
-        queue: queue.map((ticket) => mapQueueTicket(ticket, req.user.role)),
-        nowServing: mapCalledTicket(nowServing, req.user.role),
-        my,
-        eta: etaSeconds({ model, aheadCount: queue.length }),
-        serverTime: nowHHMM(),
-      };
-    });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
-  }
-});
-
-queueRouter.post("/join", requireAuth, async (req, res, next) => {
-  try {
-    const schema = z.object({ commerceId: z.string().min(1) });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
-    if (req.user.role !== "user") return res.status(403).json({ error: "only_user_can_join" });
-
-    const payload = await withTransaction(async (client) => {
-      const { commerceId } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
-      if (!commerce.open) return { error: { status: 409, body: { error: "queue_closed" } } };
-      if (commerce.paused) return { error: { status: 409, body: { error: "queue_paused" } } };
-
-      const existing = await getUserActiveTicket(client, req.user.sub);
-      if (existing) {
-        if (existing.commerce_id !== commerceId) {
-          return {
-            error: {
-              status: 409,
-              body: {
-                error: "already_has_ticket",
-                commerceId: existing.commerce_id,
-                ticketId: existing.id,
-              },
-            },
+        : {
+            id: nowServing.id,
+            calledAt: nowServing.calledAt || null,
+            joinedAt: nowServing.joinedAt || null,
           };
-        }
 
-        const queue = await getQueue(client, commerceId);
-        const idx = queue.findIndex((ticket) => ticket.id === existing.id);
-        return {
-          alreadyInQueue: true,
-          ticketId: existing.id,
-          status: idx >= 0 ? "active" : "called",
-          joinedAt: existing.joined_at,
-          position: idx >= 0 ? idx + 1 : null,
-          eta: idx >= 0 ? etaSeconds({ model: mapModel(commerce), aheadCount: idx }) : null,
-          state: { open: commerce.open, paused: commerce.paused },
-          serverTime: nowHHMM(),
-        };
-      }
-
-      const ticketId = await generateUniqueTicketId(client);
-      const joinedAt = nowISO();
-      await client.query(
-        `
-          INSERT INTO tickets (id, commerce_id, user_id, user_email, joined_at, status, updated_at)
-          VALUES ($1, $2, $3, $4, $5, 'active', NOW())
-        `,
-        [ticketId, commerceId, req.user.sub, req.user.email, joinedAt]
-      );
-      await insertEvent(client, { commerceId, type: "join", ticketId, userId: req.user.sub });
-
-      const queue = await getQueue(client, commerceId);
-      const position = queue.findIndex((ticket) => ticket.id === ticketId) + 1;
-      return {
-        alreadyInQueue: false,
-        ticketId,
-        status: "active",
-        joinedAt,
-        position,
-        eta: etaSeconds({ model: mapModel(commerce), aheadCount: Math.max(0, position - 1) }),
-        state: { open: commerce.open, paused: commerce.paused },
-        serverTime: nowHHMM(),
-      };
-    });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    commerceId,
+    state,
+    queue: queueView(q, req.user.role),
+    nowServing: visibleNowServing,
+    my,
+    eta: queueEta,
+    serverTime: nowHHMM(),
+  });
 });
 
-queueRouter.post("/cancel", requireAuth, async (req, res, next) => {
-  try {
-    const schema = z.object({
-      commerceId: z.string().min(1),
-      ticketId: z.string().optional(),
+queueRouter.post("/join", requireAuth, (req, res) => {
+  const schema = z.object({ commerceId: z.string().min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+
+  if (req.user.role !== "user") return res.status(403).json({ error: "only_user_can_join" });
+
+  const { commerceId } = parsed.data;
+  const q = db.queues[commerceId];
+  if (!q) return res.status(404).json({ error: "unknown_commerce" });
+
+  const s = getState(commerceId);
+  if (!s.open) return res.status(409).json({ error: "queue_closed" });
+  if (s.paused) return res.status(409).json({ error: "queue_paused" });
+
+  const existing = findUserActive(req.user.sub);
+  if (existing) {
+    if (existing.commerceId !== commerceId) {
+      return res.status(409).json({
+        error: "already_has_ticket",
+        commerceId: existing.commerceId,
+        ticketId: existing.ticket.id,
+      });
+    }
+    const idx = q.findIndex((t) => t.id === existing.ticket.id);
+    const position = idx >= 0 ? idx + 1 : null;
+    const eta = idx >= 0 ? etaSeconds({ model: db.models[commerceId], aheadCount: idx }) : null;
+    return res.json({
+      alreadyInQueue: true,
+      ticketId: existing.ticket.id,
+      status: idx >= 0 ? "active" : "called",
+      joinedAt: existing.ticket.joinedAt,
+      position,
+      eta,
+      state: s,
+      serverTime: nowHHMM(),
     });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
-
-    const payload = await withTransaction(async (client) => {
-      const { commerceId, ticketId } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
-
-      if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
-        return { error: { status: 403, body: { error: "wrong_commerce" } } };
-      }
-
-      const ticketResult = await client.query(
-        `
-          SELECT id, user_id, joined_at, user_email
-          FROM tickets
-          WHERE commerce_id = $1
-            AND status = 'active'
-            AND (
-              ($2::TEXT IS NOT NULL AND id = $2)
-              OR ($2::TEXT IS NULL AND $3 = 'user' AND user_id = $4)
-            )
-          ORDER BY joined_at ASC
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [commerceId, ticketId || null, req.user.role, req.user.sub]
-      );
-
-      if (ticketResult.rowCount === 0) return { error: { status: 404, body: { error: "ticket_not_found" } } };
-      const ticket = ticketResult.rows[0];
-      if (req.user.role === "user" && ticket.user_id !== req.user.sub) {
-        return { error: { status: 403, body: { error: "forbidden" } } };
-      }
-
-      const cancelledAt = nowISO();
-      await client.query(
-        `
-          UPDATE tickets
-          SET status = 'cancelled', cancelled_at = $2, updated_at = NOW()
-          WHERE id = $1
-        `,
-        [ticket.id, cancelledAt]
-      );
-      await insertEvent(client, { commerceId, type: "cancel", ticketId: ticket.id, userId: ticket.user_id });
-
-      const queue = await getQueue(client, commerceId);
-      return {
-        ok: true,
-        cancelled: { ticketId: ticket.id, joinedAt: ticket.joined_at, cancelledAt },
-        queue: queue.map((item) => mapQueueTicket(item, req.user.role)),
-        state: { open: commerce.open, paused: commerce.paused },
-        serverTime: nowHHMM(),
-      };
-    });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
   }
+
+  const ticket = {
+    id: generateTicketId(),
+    joinedAt: nowISO(),
+    userId: req.user.sub,
+    userEmail: req.user.email,
+  };
+  q.push(ticket);
+  upsertLedger(ticket, commerceId, "active");
+  db.events[commerceId].push({ type: "join", t: Date.now(), ticketId: ticket.id, userId: ticket.userId });
+
+  const position = q.length;
+  const eta = etaSeconds({ model: db.models[commerceId], aheadCount: position - 1 });
+  res.json({
+    alreadyInQueue: false,
+    ticketId: ticket.id,
+    status: "active",
+    joinedAt: ticket.joinedAt,
+    position,
+    eta,
+    state: s,
+    serverTime: nowHHMM(),
+  });
 });
 
-queueRouter.post("/next", requireAuth, requireMerchantForCommerce, async (req, res, next) => {
-  try {
-    const schema = z.object({
-      commerceId: z.string().min(1),
-      durationSec: z.number().min(10).max(60 * 60).optional(),
-    });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+queueRouter.post("/cancel", requireAuth, (req, res) => {
+  const schema = z.object({
+    commerceId: z.string().min(1),
+    ticketId: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-    const payload = await withTransaction(async (client) => {
-      const { commerceId, durationSec } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
+  const { commerceId, ticketId } = parsed.data;
+  const q = db.queues[commerceId];
+  if (!q) return res.status(404).json({ error: "unknown_commerce" });
 
-      const nowServingBefore = await getCurrentCalled(client, commerceId, true);
-      let served = null;
-      let nextModel = mapModel(commerce);
-
-      if (nowServingBefore) {
-        const servedAt = nowISO();
-        await client.query(
-          `
-            UPDATE tickets
-            SET status = 'served', served_at = $2, duration_sec = $3, updated_at = NOW()
-            WHERE id = $1
-          `,
-          [nowServingBefore.id, servedAt, typeof durationSec === "number" ? durationSec : null]
-        );
-
-        if (typeof durationSec === "number") {
-          nextModel = updateServiceModel(nextModel, durationSec);
-          await client.query(
-            `
-              UPDATE commerces
-              SET model_avg_sec = $2, model_var_sec = $3
-              WHERE id = $1
-            `,
-            [commerceId, Math.round(nextModel.avg), nextModel.var]
-          );
-        }
-
-        await insertEvent(client, {
-          commerceId,
-          type: "served",
-          ticketId: nowServingBefore.id,
-          userId: nowServingBefore.user_id,
-          durationSec: typeof durationSec === "number" ? durationSec : null,
-        });
-
-        served = { ...nowServingBefore, servedAt };
-      }
-
-      const nextTicketResult = await client.query(
-        `
-          SELECT id, joined_at, user_id, user_email
-          FROM tickets
-          WHERE commerce_id = $1 AND status = 'active'
-          ORDER BY joined_at ASC
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [commerceId]
-      );
-
-      let called = null;
-      if (nextTicketResult.rowCount > 0) {
-        const nextTicket = nextTicketResult.rows[0];
-        const calledAt = nowISO();
-        await client.query(
-          `
-            UPDATE tickets
-            SET status = 'called', called_at = $2, updated_at = NOW()
-            WHERE id = $1
-          `,
-          [nextTicket.id, calledAt]
-        );
-        await insertEvent(client, {
-          commerceId,
-          type: "call",
-          ticketId: nextTicket.id,
-          userId: nextTicket.user_id,
-        });
-        called = { ...nextTicket, called_at: calledAt };
-      }
-
-      const queue = await getQueue(client, commerceId);
-      return {
-        served,
-        called,
-        queue: queue.map((ticket) => mapQueueTicket(ticket, "merchant")),
-        model: nextModel,
-        state: { open: commerce.open, paused: commerce.paused },
-        nowServing: mapCalledTicket(called, "merchant"),
-        serverTime: nowHHMM(),
-      };
-    });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
+  if (req.user.role === "merchant" && req.user.commerceId !== commerceId) {
+    return res.status(403).json({ error: "wrong_commerce" });
   }
+
+  let idx = -1;
+  if (ticketId) idx = q.findIndex((t) => t.id === ticketId);
+  else if (req.user.role === "user") idx = q.findIndex((t) => t.userId === req.user.sub);
+
+  if (idx < 0) return res.status(404).json({ error: "ticket_not_found" });
+
+  const ticket = q[idx];
+  if (req.user.role === "user" && ticket.userId !== req.user.sub) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+
+  q.splice(idx, 1);
+  const cancelledAt = nowISO();
+  upsertLedger(ticket, commerceId, "cancelled", { cancelledAt });
+  db.events[commerceId].push({ type: "cancel", t: Date.now(), ticketId: ticket.id, userId: ticket.userId });
+
+  res.json({
+    ok: true,
+    cancelled: {
+      ticketId: ticket.id,
+      joinedAt: ticket.joinedAt,
+      cancelledAt,
+    },
+    queue: queueView(q, req.user.role),
+    state: getState(commerceId),
+    serverTime: nowHHMM(),
+  });
 });
 
-queueRouter.post("/close", requireAuth, requireMerchantForCommerce, async (req, res, next) => {
-  try {
-    const schema = z.object({ commerceId: z.string().min(1) });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+queueRouter.post("/next", requireAuth, requireMerchantForCommerce, (req, res) => {
+  const schema = z.object({
+    commerceId: z.string().min(1),
+    durationSec: z.number().min(10).max(60 * 60).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-    const payload = await withTransaction(async (client) => {
-      const { commerceId } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
+  const { commerceId, durationSec } = parsed.data;
+  const q = db.queues[commerceId];
+  if (!q) return res.status(404).json({ error: "unknown_commerce" });
 
-      const cancelledAt = nowISO();
-      const ticketRows = await client.query(
-        `
-          SELECT id, user_id
-          FROM tickets
-          WHERE commerce_id = $1 AND status IN ('active', 'called')
-          FOR UPDATE
-        `,
-        [commerceId]
-      );
+  const nowServingBefore = getNowServing(commerceId);
+  let served = null;
 
-      for (const ticket of ticketRows.rows) {
-        await client.query(
-          `
-            UPDATE tickets
-            SET status = 'cancelled', cancelled_at = $2, updated_at = NOW()
-            WHERE id = $1
-          `,
-          [ticket.id, cancelledAt]
-        );
-        await insertEvent(client, {
-          commerceId,
-          type: "cancel",
-          ticketId: ticket.id,
-          userId: ticket.user_id,
-          reason: "close",
-        });
-      }
+  if (nowServingBefore) {
+    const servedAt = nowISO();
+    served = { ...nowServingBefore, servedAt };
+    upsertLedger(nowServingBefore, commerceId, "served", { servedAt, durationSec: durationSec ?? null });
 
-      await client.query(
-        `
-          UPDATE commerces
-          SET open = FALSE, paused = FALSE
-          WHERE id = $1
-        `,
-        [commerceId]
-      );
-      await insertEvent(client, { commerceId, type: "close" });
-      return { ok: true, state: { open: false, paused: false }, serverTime: nowHHMM() };
+    if (typeof durationSec === "number") {
+      db.models[commerceId] = updateServiceModel(db.models[commerceId], durationSec);
+    }
+    db.events[commerceId].push({
+      type: "served",
+      t: Date.now(),
+      durationSec: typeof durationSec === "number" ? durationSec : null,
+      ticketId: nowServingBefore.id,
+      userId: nowServingBefore.userId,
     });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
   }
+
+  const nextTicket = q.shift() || null;
+  let called = null;
+  if (nextTicket) {
+    called = { ...nextTicket, calledAt: nowISO() };
+    setNowServing(commerceId, called);
+    upsertLedger(nextTicket, commerceId, "called", { calledAt: called.calledAt });
+    db.events[commerceId].push({ type: "call", t: Date.now(), ticketId: nextTicket.id, userId: nextTicket.userId });
+  } else {
+    setNowServing(commerceId, null);
+  }
+
+  res.json({
+    served,
+    called,
+    queue: queueView(q, "merchant"),
+    model: db.models[commerceId],
+    state: getState(commerceId),
+    nowServing: getNowServing(commerceId),
+    serverTime: nowHHMM(),
+  });
 });
 
-queueRouter.post("/open", requireAuth, requireMerchantForCommerce, async (req, res, next) => {
-  try {
-    const schema = z.object({ commerceId: z.string().min(1) });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+queueRouter.post("/close", requireAuth, requireMerchantForCommerce, (req, res) => {
+  const schema = z.object({ commerceId: z.string().min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-    const payload = await withTransaction(async (client) => {
-      const { commerceId } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
+  const { commerceId } = parsed.data;
+  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
 
-      await client.query("UPDATE commerces SET open = TRUE WHERE id = $1", [commerceId]);
-      await insertEvent(client, { commerceId, type: "open" });
-      return { ok: true, state: { open: true, paused: commerce.paused }, serverTime: nowHHMM() };
-    });
-
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
+  const cancelledAt = nowISO();
+  for (const t of db.queues[commerceId]) {
+    upsertLedger(t, commerceId, "cancelled", { cancelledAt });
+    db.events[commerceId].push({ type: "cancel", t: Date.now(), ticketId: t.id, userId: t.userId, reason: "close" });
   }
+
+  const serving = getNowServing(commerceId);
+  if (serving) {
+    upsertLedger(serving, commerceId, "cancelled", { cancelledAt });
+    db.events[commerceId].push({ type: "cancel", t: Date.now(), ticketId: serving.id, userId: serving.userId, reason: "close" });
+  }
+
+  db.queues[commerceId] = [];
+  setNowServing(commerceId, null);
+  const s = getState(commerceId);
+  s.open = false;
+  s.paused = false;
+
+  db.events[commerceId].push({ type: "close", t: Date.now() });
+  res.json({ ok: true, state: s, serverTime: nowHHMM() });
 });
 
-queueRouter.post("/pause", requireAuth, requireMerchantForCommerce, async (req, res, next) => {
-  try {
-    const schema = z.object({ commerceId: z.string().min(1), paused: z.boolean() });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+queueRouter.post("/open", requireAuth, requireMerchantForCommerce, (req, res) => {
+  const schema = z.object({ commerceId: z.string().min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-    const payload = await withTransaction(async (client) => {
-      const { commerceId, paused } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
+  const { commerceId } = parsed.data;
+  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
 
-      await client.query("UPDATE commerces SET paused = $2 WHERE id = $1", [commerceId, paused]);
-      await insertEvent(client, { commerceId, type: paused ? "pause" : "resume" });
-      return { ok: true, state: { open: commerce.open, paused }, serverTime: nowHHMM() };
-    });
+  const s = getState(commerceId);
+  s.open = true;
+  db.events[commerceId].push({ type: "open", t: Date.now() });
 
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
-  }
+  res.json({ ok: true, state: s, serverTime: nowHHMM() });
 });
 
-queueRouter.post("/model", requireAuth, requireMerchantForCommerce, async (req, res, next) => {
-  try {
-    const schema = z.object({
-      commerceId: z.string().min(1),
-      avgMin: z.number().min(1).max(120).optional(),
-    });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+queueRouter.post("/pause", requireAuth, requireMerchantForCommerce, (req, res) => {
+  const schema = z.object({ commerceId: z.string().min(1), paused: z.boolean() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
 
-    const payload = await withTransaction(async (client) => {
-      const { commerceId, avgMin } = parsed.data;
-      const commerce = await getCommerce(client, commerceId);
-      if (!commerce) return { error: { status: 404, body: { error: "unknown_commerce" } } };
+  const { commerceId, paused } = parsed.data;
+  if (!db.queues[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
 
-      let model = mapModel(commerce);
-      if (typeof avgMin === "number") {
-        model = { ...model, avg: avgMin * 60 };
-        await client.query(
-          `
-            UPDATE commerces
-            SET model_avg_sec = $2
-            WHERE id = $1
-          `,
-          [commerceId, model.avg]
-        );
-        await insertEvent(client, { commerceId, type: "model_update", avgSec: model.avg });
-      }
+  const s = getState(commerceId);
+  s.paused = paused;
+  db.events[commerceId].push({ type: paused ? "pause" : "resume", t: Date.now() });
 
-      return { ok: true, model };
-    });
+  res.json({ ok: true, state: s, serverTime: nowHHMM() });
+});
 
-    if (payload.error) return res.status(payload.error.status).json(payload.error.body);
-    return res.json(payload);
-  } catch (error) {
-    next(error);
+queueRouter.post("/model", requireAuth, requireMerchantForCommerce, (req, res) => {
+  const schema = z.object({
+    commerceId: z.string().min(1),
+    avgMin: z.number().min(1).max(120).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "bad_request" });
+
+  const { commerceId, avgMin } = parsed.data;
+  if (!db.models[commerceId]) return res.status(404).json({ error: "unknown_commerce" });
+
+  if (typeof avgMin === "number") {
+    const avg = avgMin * 60;
+    const cur = db.models[commerceId];
+    db.models[commerceId] = { ...cur, avg };
+    db.events[commerceId].push({ type: "model_update", t: Date.now(), avgSec: avg });
   }
+
+  res.json({ ok: true, model: db.models[commerceId] });
 });
 
 module.exports = { queueRouter };
